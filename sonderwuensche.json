@@ -1,0 +1,17 @@
+{
+  "overrides": [
+    {
+      "name": "Martina",
+      "day": 4,
+      "slot": 1,
+      "task": "*Arzttermin 14.45",
+      "_comment": "Freitag Nachmittag"
+    }
+  ],
+  "_hilfe": {
+    "day": "0=Montag, 1=Dienstag, 2=Mittwoch, 3=Donnerstag, 4=Freitag",
+    "slot": "0=Vormittag, 1=Nachmittag",
+    "task": "Aufgabe oder *Notiz (z.B. *Arzttermin 14.45)",
+    "name": "Kurzname: Silvana, Linda, Lara, Andrea G., Dipiga, Isaura, Martina, Alessia, Amra, Nina, Jesika, Brigitte, Florence, Corinne, Saskia, Dragi, Maria B., Andrea A."
+  }
+}
