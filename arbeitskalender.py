@@ -57,21 +57,21 @@ COLORS = {
     "ERF9/TEL":  "FF0000",  # ERF9 + Telefon
     "ERF4/SCH":  "C6EFCE",  # Schalter - hellgrün
     "ERF5":      "F4B084",  # ERF5 (Hellorange)
-    "PO":        "D9E1F2",  # Postöffnung
-    "PO/ABKL":   "FFC000",  # Post + Abklärung
-    "PO/TEL":    "92D050",  # Post + Telefon
-    "PO/SCAN":   "E2EFDA",  # Post/Scanning
+    "PO":        "D6DCE4",  # Postöffnung (grau-blau)
+    "PO/ABKL":   "E8C96C",  # Post + Abklärung (gold)
+    "PO/TEL":    "70AD47",  # Post + Telefon (dunkelgrün)
+    "PO/SCAN":   "A9D18E",  # Post/Scanning (hellgrün)
     "HO":        "BDD7EE",  # Home Office
     "HO/Q":      "BDD7EE",  # Home Office + Queue
-    "VBZ/Q":     "E2EFDA",  # Vorbezüge + Queue
+    "VBZ/Q":     "C5E0B4",  # Vorbezüge + Queue (lindgrün)
     "KSC Spez.": "FFFF00",  # Kundenservicecenter Spezial
-    "KGT":       "FFFF00",  # Kein Tagesgeschäft
+    "KGT":       "FFD966",  # Kein Tagesgeschäft (dunkelgelb)
     "TAGESPA":   "00FFFF",  # Tagespharma
     "RX Abo":    "D9D9D9",  # Rezept Abo
     "Direkt":    "B4C6E7",  # Direktbestellung
-    "ONB":       "D9E1F2",
-    "BTM":       "F8CBAD",
-    "KTG":       "A9D18E",  # Kranktaggeld
+    "ONB":       "CCCCFF",  # ONB (lavendel)
+    "BTM":       "F8CBAD",  # BTM (pfirsich)
+    "KTG":       "548235",  # Kranktaggeld (waldgrün)
     "KRANK":     "FF9999",  # Krank
     "FERIEN":    "F2F2F2",  # Ferien
     "":          "FFFFFF",
@@ -328,6 +328,8 @@ class Schedule:
         self.tagesverantwortung = {}
         # 18 Uhr / PHC-Liste: day -> name (blau hinterlegt)
         self.phc_liste = {}
+        # Nebenplan-Aufgaben (Direkt, ONB, BTM) — in Zeiten-Spalte
+        self.nebenplan = {}  # name -> [task_strings]
 
     def assign(self, name, day, slot, task):
         """Weist eine Aufgabe zu, wenn der Slot noch frei ist."""
@@ -409,12 +411,18 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # ========================================
     # 0. SONDERWÜNSCHE / OVERRIDES eintragen
     # ========================================
+    nebenplan_tasks = {"ONB", "BTM", "Direkt"}
     if overrides:
         for (name, day, slot), task in overrides.items():
             if name in employees:
-                sched.assign(name, day, slot, task)
                 if task.startswith("*"):
                     sched.notes[(name, day, slot)] = task
+                elif task in nebenplan_tasks:
+                    sched.nebenplan[name] = sched.nebenplan.get(name, [])
+                    if task not in sched.nebenplan[name]:
+                        sched.nebenplan[name].append(task)
+                else:
+                    sched.assign(name, day, slot, task)
 
     # ========================================
     # 1. FESTE ZUWEISUNGEN
@@ -596,19 +604,15 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                     break
 
     # ========================================
-    # 9. DIREKTBESTELLUNG: Andrea A., Andrea G., Silvana
+    # 9. DIREKTBESTELLUNG: 1 Person pro Woche (Rotation)
+    #    Nebenplan-Aufgabe — wird in Zeiten-Spalte angezeigt
     # ========================================
     direkt_people = ["Andrea A.", "Andrea G.", "Silvana"]
-    for name in direkt_people:
-        assigned = False
-        for day in range(5):
-            if assigned:
-                break
-            for slot in [1, 0]:  # NM bevorzugt
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "Direkt")
-                    assigned = True
-                    break
+    direkt_idx = state.get("direkt_idx", 0)
+    direkt_person = direkt_people[direkt_idx % len(direkt_people)]
+    sched.nebenplan[direkt_person] = sched.nebenplan.get(direkt_person, [])
+    sched.nebenplan[direkt_person].append("Direkt")
+    state["direkt_idx"] = (direkt_idx + 1) % len(direkt_people)
 
     # ========================================
     # 10. VORBEZÜGE: Lara, Nina
@@ -863,23 +867,41 @@ def write_excel(sched, output_path):
                         cell.fill = PatternFill('solid', fgColor=PHC_COLOR)
                         cell.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
 
-        # Zeitnotiz
+        # Zeiten-Spalte: Nebenplan (Direkt/ONB/BTM) + Zeitnotizen + Sonderwünsche
+        zeiten_parts = []
+        if name in sched.nebenplan:
+            zeiten_parts.extend(sched.nebenplan[name])
         if name in sched.time_notes:
-            cell = ws.cell(row=row, column=13, value=sched.time_notes[name])
-            cell.font = cell_font
-            cell.border = thin_border
-
-        # Sonderwunsch-Notizen (z.B. *Arzttermin 14.45) in Zeitspalte
+            zeiten_parts.append(sched.time_notes[name])
         for day in range(5):
             for slot in range(2):
                 note_key = (name, day, slot)
                 if note_key in sched.notes:
-                    note_text = sched.notes[note_key].lstrip("*")
-                    cell = ws.cell(row=row, column=13, value=note_text)
-                    cell.font = cell_font
-                    cell.border = thin_border
+                    zeiten_parts.append(sched.notes[note_key].lstrip("*"))
+        if zeiten_parts:
+            cell = ws.cell(row=row, column=13, value="\n".join(zeiten_parts))
+            cell.font = cell_font
+            cell.border = thin_border
+            cell.alignment = Alignment(wrap_text=True, vertical='top')
 
         row += 1
+
+    # ========================================
+    # Legende: TV-Farben (Tagesverantwortung)
+    # ========================================
+    if sched.tagesverantwortung:
+        row += 1  # Leerzeile
+        cell = ws.cell(row=row, column=1, value="Legende Tagesverantwortung:")
+        cell.font = Font(bold=True, size=8, name='Arial')
+        col = 3
+        for tv_name in dict.fromkeys(sched.tagesverantwortung.values()):
+            if tv_name in TV_COLORS:
+                c = ws.cell(row=row, column=col, value=tv_name)
+                c.font = Font(bold=True, size=8, name='Arial', color='FFFFFF')
+                c.fill = PatternFill('solid', fgColor=TV_COLORS[tv_name])
+                c.alignment = Alignment(horizontal='center')
+                c.border = thin_border
+                col += 1
 
     wb.save(output_path)
     return output_path

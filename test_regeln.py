@@ -164,22 +164,21 @@ def validate_week(sched, kw, employees):
               if "HUB" in sched.get_task(name, day, slot)))
 
     # ──────────────────────────────────────────
-    # REGEL 14: Direktbestellung nur Andrea A., Andrea G., Silvana
+    # REGEL 14: Direktbestellung nur Andrea A., Andrea G., Silvana (Nebenplan)
     # ──────────────────────────────────────────
     direkt_allowed = {"Andrea A.", "Andrea G.", "Silvana"}
+    direkt_nebenplan = [n for n in sched.nebenplan if "Direkt" in sched.nebenplan.get(n, [])]
+    check("Direkt nur für berechtigte Personen",
+          all(n in direkt_allowed for n in direkt_nebenplan),
+          f"Direkt bei nicht-berechtigten: {[n for n in direkt_nebenplan if n not in direkt_allowed]}")
+    # Direkt darf nicht im Hauptraster stehen
     for name in employees:
         for day in range(5):
             for slot in range(2):
                 t = sched.get_task(name, day, slot)
-                if "Direkt" in t and name not in direkt_allowed:
-                    check(f"{name}: kein Direkt erlaubt", False,
-                          f"hat Direkt an {DAYS[day]} {SLOTS[slot]}")
-    check("Direkt nur für berechtigte Personen",
-          all(name in direkt_allowed
-              for name in employees
-              for day in range(5)
-              for slot in range(2)
-              if "Direkt" in sched.get_task(name, day, slot)))
+                if t == "Direkt":
+                    check(f"{name}: Direkt nicht im Hauptraster", False,
+                          f"Direkt an {DAYS[day]} {SLOTS[slot]} (soll Nebenplan sein)")
 
     # ──────────────────────────────────────────
     # REGEL 15: RX/Fx Abo nur Lara, Linda, Isaura, Martina
