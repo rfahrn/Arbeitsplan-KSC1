@@ -2,6 +2,25 @@
 """
 Arbeitskalender-Generator für KSC-Team
 Erstellt wöchentliche Arbeitspläne als Excel-Datei mit allen Regeln.
+
+OFFENE PUNKTE (vor weiterer Automatisierung zu klären):
+  1. Ist HUB nur mit ERF7 kombinierbar oder auch mit ERF8?
+     (Screenshot zeigt ERF8/HUB, aktuelle Regel sagt nur ERF7)
+  2. Was genau bedeutet KGS? Im Code wird KGT verwendet (= Kein Tagesgeschäft).
+     KGS könnte eine Schreibvariante oder ein eigenes Kürzel sein.
+  3. Was bedeutet ONB genau? Es gibt Ausschlussregeln, aber keine Definition.
+  4. Was bedeutet TPA genau? Bisher nur "NM möglich mit TEL".
+  5. Welche Personen sind TL? Aktuell definiert: Silvana, Linda, Lara.
+  6. Wie genau rotiert die Tagesverantwortung?
+     Aktuell: Lara/Silvana wechseln wöchentlich, Linda fix Di-NM + Mi-VM + Fr-NM.
+  7. 2-Wochen-Logik: Startwochen-Referenz für gerade/ungerade KW
+     (Linda Fr frei, Isaura Mi frei, Corinne Fr frei, Linda HO Di, Schalter).
+  8. ERF9 Mo/Di: Wird als Ganztags-Aufgabe behandelt (VM + NM).
+  9. Florence Di PO: Aktuell als Muss-Regel implementiert. Muss oder Soll?
+ 10. Stephi (Rämi Stephanie) erscheint im Screenshot, ist als KSC-Leiterin
+     mit permanentem KGT implementiert. Stammdaten ggf. ergänzen.
+ 11. VBZ/Q: Im Screenshot sichtbar, Bedeutung teilweise unklar.
+     Aktuell: Vorbezüge + Queue, nur Lara und Nina.
 """
 
 import json
@@ -114,7 +133,7 @@ def create_employees(week_number):
     employees["Silvana"] = e
 
     # --- Rexhaj Majlinda (Linda) - 90%, jeden 2. Freitag frei (TL) ---
-    e = Employee("Rexhaj Majlinda", "Linda", 90, is_tl=True)
+    e = Employee("Rexhaj Majlinda", "Linda", 90, can_rx_abo=True, is_tl=True)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = True
@@ -411,8 +430,9 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     if "Maria B." in employees:
         sched.assign("Maria B.", 0, 0, "HO")
 
-    # Brigitte jeden Montag ERF9 (VM, NM TEL möglich)
+    # Brigitte jeden Montag ERF9 (ganztags)
     sched.assign("Brigitte", 0, 0, "ERF9")
+    sched.assign("Brigitte", 0, 1, "ERF9")
 
     # Dragi jeden Dienstag ERF9
     if employees["Dragi"].is_available(1, 0):
@@ -448,11 +468,11 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # ========================================
     # 2. TEL - HÖCHSTE PRIORITÄT
     #    4 am Montagmorgen, sonst 3
+    #    Soll-Regel: Jede TL soll 1-2x pro Woche TEL machen
     # ========================================
-    # Bevorzugte TEL-Kandidaten (alle ausser TL und spezielle)
-    tel_prefer = [n for n in employees
-                  if n not in ["Brigitte", "Maria B."]
-                  and employees[n].is_available(0, 0)]
+    tl_names = [n for n, emp in employees.items() if emp.is_tl]
+    tl_tel_count = {n: 0 for n in tl_names}
+
     for day in range(5):
         for slot in range(2):
             target = 4 if (day == 0 and slot == 0) else 3
@@ -461,13 +481,22 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
             if needed <= 0:
                 continue
             available = sched.get_available_for_task(day, slot)
-            random.shuffle(available)
+            # TL bevorzugt einplanen, wenn sie noch < 2x TEL haben
+            tl_available = [n for n in available
+                            if n in tl_tel_count and tl_tel_count[n] < 2]
+            other_available = [n for n in available if n not in tl_names]
+            random.shuffle(tl_available)
+            random.shuffle(other_available)
+            # Zuerst TL, dann Rest
+            prioritized = tl_available + other_available
             count = 0
-            for name in available:
+            for name in prioritized:
                 if count >= needed:
                     break
                 if sched.assign(name, day, slot, "TEL"):
                     count += 1
+                    if name in tl_tel_count:
+                        tl_tel_count[name] += 1
 
     # ========================================
     # 3. ABKL - 2 pro Halbtag
@@ -529,15 +558,15 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # ========================================
     # 7. SCHALTER (ERF4/SCH) - alle 2 Wochen
     # ========================================
-    schalter_eligible = []
-    for name, emp in employees.items():
-        if emp.can_schalter and name not in ["Linda", "Florence", "Corinne",
-                                              "Maria B.", "Andrea A.",
-                                              "Brigitte", "Saskia", "Dragi"]:
-            schalter_eligible.append(name)
-
+    # Feste, stabile Gruppen für Schalter-Rotation (nicht shufflen!)
+    schalter_eligible = sorted(
+        [name for name, emp in employees.items()
+         if emp.can_schalter and name not in ["Linda", "Florence", "Corinne",
+                                               "Maria B.", "Andrea A.",
+                                               "Brigitte", "Saskia", "Dragi",
+                                               "Stephi"]],
+    )
     schalter_this_week = state.get("schalter_group", 0)
-    random.shuffle(schalter_eligible)
     mid = len(schalter_eligible) // 2
     if schalter_this_week == 0:
         schalter_active = schalter_eligible[:mid]
@@ -1202,6 +1231,10 @@ def interactive_input(week_number):
 def validate_result(sched):
     """Prüft die wichtigsten Regeln und zeigt Warnungen."""
     issues = []
+    warnings = []
+    employees = sched.employees
+
+    # TEL und ABKL Mindestbesetzung
     for day in range(5):
         for slot in range(2):
             target_tel = 4 if (day == 0 and slot == 0) else 3
@@ -1213,14 +1246,43 @@ def validate_result(sched):
                 issues.append(f"❌ {DAYS[day]} {SLOTS[slot]}: ABKL nur {abkl_c}/2")
 
     # ERF8 pro Tag
-    employees = sched.employees
     for day in range(5):
         has_erf8 = any("ERF8" in sched.get_task(n, day, s)
                        for n in employees for s in range(2))
         if not has_erf8:
             issues.append(f"❌ {DAYS[day]}: Kein ERF8 besetzt!")
 
-    return issues
+    # ONB-Ausschluss prüfen (via Overrides zugewiesen)
+    no_onb = [n for n, emp in employees.items() if not emp.can_onb]
+    for name in no_onb:
+        for day in range(5):
+            for slot in range(2):
+                t = sched.get_task(name, day, slot)
+                if "ONB" in t:
+                    issues.append(f"❌ {name}: ONB zugewiesen an {DAYS[day]} {SLOTS[slot]}, aber nicht erlaubt!")
+
+    # Queue nur bei TL prüfen
+    for name, emp in employees.items():
+        if emp.is_tl:
+            continue
+        for day in range(5):
+            for slot in range(2):
+                t = sched.get_task(name, day, slot)
+                if "/Q" in t and "PO" not in t and "SCAN" not in t:
+                    warnings.append(f"⚠️  {name}: hat Queue-Aufgabe ({t}) an {DAYS[day]} {SLOTS[slot]}, ist aber kein TL")
+
+    # TL-TEL Soft-Regel: Jede TL soll 1-2x pro Woche TEL haben
+    for name, emp in employees.items():
+        if not emp.is_tl:
+            continue
+        tel_count = sum(1 for day in range(5) for slot in range(2)
+                        if "TEL" in sched.get_task(name, day, slot))
+        if tel_count == 0:
+            warnings.append(f"⚠️  TL {name}: hat 0x TEL diese Woche (Soll: 1-2x)")
+        elif tel_count > 2:
+            warnings.append(f"⚠️  TL {name}: hat {tel_count}x TEL diese Woche (Soll: 1-2x)")
+
+    return issues + warnings
 
 
 def main():
