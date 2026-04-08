@@ -106,15 +106,15 @@ def create_employees(week_number):
 
     employees = {}
 
-    # --- Silvana Grossenbacher - 100% ---
-    e = Employee("Grossenbacher Silvana", "Silvana", 100, can_direkt=True)
+    # --- Silvana Grossenbacher - 100% (TL) ---
+    e = Employee("Grossenbacher Silvana", "Silvana", 100, can_direkt=True, is_tl=True)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = True
     employees["Silvana"] = e
 
-    # --- Rexhaj Majlinda (Linda) - 90%, jeden 2. Freitag frei ---
-    e = Employee("Rexhaj Majlinda", "Linda", 90)
+    # --- Rexhaj Majlinda (Linda) - 90%, jeden 2. Freitag frei (TL) ---
+    e = Employee("Rexhaj Majlinda", "Linda", 90, is_tl=True)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = True
@@ -123,8 +123,8 @@ def create_employees(week_number):
         e.available[(4, 1)] = False
     employees["Linda"] = e
 
-    # --- Lara Ierano - 100% ---
-    e = Employee("Lara Ierano", "Lara", 100, can_rx_abo=True, can_vbz=True)
+    # --- Lara Ierano - 100% (TL) ---
+    e = Employee("Lara Ierano", "Lara", 100, can_rx_abo=True, can_vbz=True, is_tl=True)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = True
@@ -275,6 +275,13 @@ def create_employees(week_number):
     e.available[(2, 1)] = True
     employees["Andrea A."] = e
 
+    # --- Stucki Stephanie (Stephi) - KSC-Leiterin, KGT ---
+    e = Employee("Stucki Stephanie", "Stephi", 100)
+    for d in range(5):
+        for s in range(2):
+            e.available[(d, s)] = True
+    employees["Stephi"] = e
+
     return employees
 
 
@@ -377,6 +384,7 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
         state["schalter_group"] = 1 - state.get("schalter_group", 0)
         state["friday_tagesv_corinne"] = not state.get("friday_tagesv_corinne", True)
         state["tl_monday_idx"] = state.get("tl_monday_idx", 0) + 1
+        state["tv_lara_week"] = not state.get("tv_lara_week", False)
     # else: Re-Run für gleiche Woche → State bleibt identisch
 
     # ========================================
@@ -392,6 +400,12 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # ========================================
     # 1. FESTE ZUWEISUNGEN
     # ========================================
+
+    # Stephi (KSC-Leiterin) jeden Tag KGT
+    if "Stephi" in employees:
+        for d in range(5):
+            for s in range(2):
+                sched.assign("Stephi", d, s, "KGT")
 
     # Maria B. Montagmorgen HO
     if "Maria B." in employees:
@@ -581,37 +595,32 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 break
 
     # ========================================
-    # 11. PO/SCANNING für übrige (wo erlaubt)
+    # 11. PO/SCANNING für übrige (wo erlaubt, max 2 pro Tag)
     # ========================================
     no_scanning = ["Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"]
-    for name in employees:
-        if name in no_scanning:
-            continue
-        for day in range(5):
+    po_scan_today = {d: 0 for d in range(5)}
+    scanning_eligible = [n for n in employees if n not in no_scanning]
+    random.shuffle(scanning_eligible)
+    for day in range(5):
+        for name in scanning_eligible:
+            if po_scan_today[day] >= 2:
+                break
             for slot in range(2):
-                if sched.is_free(name, day, slot):
+                if sched.is_free(name, day, slot) and po_scan_today[day] < 2:
                     sched.assign(name, day, slot, "PO/SCAN")
+                    po_scan_today[day] += 1
 
     # ========================================
-    # 12. ONB zuweisen (wo erlaubt)
-    # ========================================
-    no_onb = ["Brigitte", "Florence", "Saskia", "Dragi", "Maria B.", "Andrea A."]
-    for name in employees:
-        if name in no_onb:
-            continue
-        for day in range(5):
-            for slot in range(2):
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "ONB")
-
-    # ========================================
-    # 13. Restliche Slots mit ERF7 füllen
+    # 12. Restliche Slots mit ERF7 füllen (TL bekommen ERF7/Q)
     # ========================================
     for name in employees:
         for day in range(5):
             for slot in range(2):
                 if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "ERF7")
+                    if employees[name].is_tl:
+                        sched.assign(name, day, slot, "ERF7/Q")
+                    else:
+                        sched.assign(name, day, slot, "ERF7")
 
     # ========================================
     # 14. 18 UHR / PHC-LISTE (blau, 1 Pers/Tag)
@@ -645,9 +654,32 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # ========================================
     # 15. TAGESVERANTWORTUNG (farbiger Name)
     # ========================================
-    # TL wechseln sich ab — nicht genau definiert
-    # Wir markieren pro Tag wer Tagesverantwortung hat
-    sched.tagesverantwortung = {}
+    # Woche A (tv_lara_week=True): Lara 3 Halbtage + Linda 2 Halbtage
+    # Woche B (tv_lara_week=False): Silvana 3 Halbtage + Linda 2 Halbtage
+    # Verteilung: Mo-VM, Mo-NM, Di-VM = Hauptperson (3 Halbtage)
+    #             Di-NM, Mi-VM = Linda (2 Halbtage)
+    #             Mi-NM bis Fr-NM = verbleibende TL rotierend
+    tv = {}
+    if state.get("tv_lara_week", False):
+        haupt_tl = "Lara"
+        rest_tl = "Silvana"
+    else:
+        haupt_tl = "Silvana"
+        rest_tl = "Lara"
+    # Erste 3 Halbtage: Haupt-TL
+    tv[(0, 0)] = haupt_tl  # Mo VM
+    tv[(0, 1)] = haupt_tl  # Mo NM
+    tv[(1, 0)] = haupt_tl  # Di VM
+    # Nächste 2 Halbtage: Linda
+    tv[(1, 1)] = "Linda"   # Di NM
+    tv[(2, 0)] = "Linda"   # Mi VM
+    # Restliche 5 Halbtage: Rotation zwischen rest_tl und haupt_tl
+    tv[(2, 1)] = rest_tl   # Mi NM
+    tv[(3, 0)] = rest_tl   # Do VM
+    tv[(3, 1)] = rest_tl   # Do NM
+    tv[(4, 0)] = haupt_tl  # Fr VM
+    tv[(4, 1)] = "Linda"   # Fr NM
+    sched.tagesverantwortung = tv
 
     # State speichern
     save_state(state, state_file)
@@ -745,6 +777,7 @@ def write_excel(sched, output_path):
 
     # Mitarbeiter-Reihenfolge (wie im Bild)
     order = [
+        "Stephi",
         "Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
         "Isaura", "Martina", "Alessia", "Amra", "Nina",
         "Jesika", "Brigitte", "Florence", "Corinne", "Saskia",
@@ -787,11 +820,6 @@ def write_excel(sched, output_path):
                 if color:
                     cell.fill = PatternFill('solid', fgColor=color)
 
-                # 18 Uhr / PHC-Liste: blau hinterlegen
-                if sched.phc_liste.get(day) == name:
-                    cell.fill = PatternFill('solid', fgColor=PHC_COLOR)
-                    cell.font = Font(size=9, name='Arial', color='FFFFFF')
-
         # Zeitnotiz
         if name in sched.time_notes:
             cell = ws.cell(row=row, column=13, value=sched.time_notes[name])
@@ -809,6 +837,55 @@ def write_excel(sched, output_path):
                     cell.border = thin_border
 
         row += 1
+
+    # ========================================
+    # Tagesverantwortung-Zeile (farbig pro Halbtag)
+    # ========================================
+    if sched.tagesverantwortung:
+        row += 1  # Leerzeile
+        # Label
+        cell = ws.cell(row=row, column=1, value="Tagesverantwortung")
+        cell.font = Font(bold=True, size=9, name='Arial')
+        cell.border = thin_border
+        cell = ws.cell(row=row, column=2, value="")
+        cell.border = thin_border
+
+        for day in range(5):
+            for slot in range(2):
+                col = 3 + day * 2 + slot
+                tv_name = sched.tagesverantwortung.get((day, slot), "")
+                cell = ws.cell(row=row, column=col, value=tv_name)
+                cell.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
+                cell.alignment = Alignment(horizontal='center')
+                cell.border = thin_border
+                if tv_name and tv_name in TV_COLORS:
+                    cell.fill = PatternFill('solid', fgColor=TV_COLORS[tv_name])
+
+    # ========================================
+    # PHC-Liste / 18 Uhr Zeile (blau)
+    # ========================================
+    if sched.phc_liste:
+        row += 1
+        cell = ws.cell(row=row, column=1, value="18 Uhr / PHC-Liste")
+        cell.font = Font(bold=True, size=9, name='Arial')
+        cell.border = thin_border
+        cell = ws.cell(row=row, column=2, value="")
+        cell.border = thin_border
+
+        for day in range(5):
+            phc_name = sched.phc_liste.get(day, "")
+            # PHC spans both VM and NM columns for the day
+            for slot in range(2):
+                col = 3 + day * 2 + slot
+                cell = ws.cell(row=row, column=col, value=phc_name if slot == 0 else "")
+                cell.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
+                cell.alignment = Alignment(horizontal='center')
+                cell.border = thin_border
+                cell.fill = PatternFill('solid', fgColor=PHC_COLOR)
+            # Merge the two cells for the day
+            start_col = 3 + day * 2
+            ws.merge_cells(start_row=row, start_column=start_col,
+                           end_row=row, end_column=start_col + 1)
 
     wb.save(output_path)
     return output_path
@@ -857,6 +934,7 @@ def load_overrides(filepath="sonderwuensche.json"):
 # ============================================================
 
 EMPLOYEE_NAMES = [
+    "Stephi",
     "Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
     "Isaura", "Martina", "Alessia", "Amra", "Nina",
     "Jesika", "Brigitte", "Florence", "Corinne", "Saskia",

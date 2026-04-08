@@ -85,11 +85,11 @@ def validate_week(sched, kw, employees):
     # ──────────────────────────────────────────
     # REGEL 7: Dipiga KGS Di-VM und Do-NM
     # ──────────────────────────────────────────
-    check("Dipiga Di VM = KGS",
-          "KGS" in sched.get_task("Dipiga", 1, 0),
+    check("Dipiga Di VM = KGT",
+          "KGT" in sched.get_task("Dipiga", 1, 0),
           f"hat: {sched.get_task('Dipiga', 1, 0)}")
-    check("Dipiga Do NM = KGS",
-          "KGS" in sched.get_task("Dipiga", 3, 1),
+    check("Dipiga Do NM = KGT",
+          "KGT" in sched.get_task("Dipiga", 3, 1),
           f"hat: {sched.get_task('Dipiga', 3, 1)}")
 
     # ──────────────────────────────────────────
@@ -133,17 +133,17 @@ def validate_week(sched, kw, employees):
               "hat Scanning zugewiesen!")
 
     # ──────────────────────────────────────────
-    # REGEL 12: Keine ONB für bestimmte Personen
+    # REGEL 12: Stephi hat immer KGT
     # ──────────────────────────────────────────
-    no_onb = ["Brigitte", "Florence", "Saskia", "Dragi", "Maria B.", "Andrea A."]
-    for name in no_onb:
-        has_onb = False
+    if "Stephi" in employees:
+        stephi_ok = True
         for day in range(5):
             for slot in range(2):
-                if "ONB" in sched.get_task(name, day, slot):
-                    has_onb = True
-        check(f"{name}: keine ONB", not has_onb,
-              "hat ONB zugewiesen!")
+                t = sched.get_task("Stephi", day, slot)
+                if t != "KGT":
+                    stephi_ok = False
+        check("Stephi: immer KGT", stephi_ok,
+              "Stephi hat nicht überall KGT!")
 
     # ──────────────────────────────────────────
     # REGEL 13: HUB nur für berechtigte Personen
@@ -257,9 +257,9 @@ def validate_alternation(weeks_data):
         # Labor
         jes = sched.get_task("Jesika", 2, 1)
         dip = sched.get_task("Dipiga", 2, 1)
-        if "Labor" in jes:
+        if "ERF5" in jes:
             labor_pattern.append("Jesika")
-        elif "Labor" in dip:
+        elif "ERF5" in dip:
             labor_pattern.append("Dipiga")
         else:
             labor_pattern.append("?")
