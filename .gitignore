@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+verify_plan.xlsx
+test_state.json
+verify_state.json
