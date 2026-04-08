@@ -133,17 +133,17 @@ def validate_week(sched, kw, employees):
               "hat Scanning zugewiesen!")
 
     # ──────────────────────────────────────────
-    # REGEL 12: Stephi hat immer KGT
+    # REGEL 12: Stephi hat KEINE Aufgaben (nicht im Tagesgeschäft)
     # ──────────────────────────────────────────
     if "Stephi" in employees:
         stephi_ok = True
         for day in range(5):
             for slot in range(2):
                 t = sched.get_task("Stephi", day, slot)
-                if t != "KGT":
+                if t:
                     stephi_ok = False
-        check("Stephi: immer KGT", stephi_ok,
-              "Stephi hat nicht überall KGT!")
+        check("Stephi: keine Aufgaben (nicht im Tagesgeschäft)", stephi_ok,
+              "Stephi hat unerwartete Aufgaben!")
 
     # ──────────────────────────────────────────
     # REGEL 13: HUB nur für berechtigte Personen

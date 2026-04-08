@@ -294,11 +294,11 @@ def create_employees(week_number):
     e.available[(2, 1)] = True
     employees["Andrea A."] = e
 
-    # --- Stucki Stephanie (Stephi) - KSC-Leiterin, KGT ---
+    # --- Stucki Stephanie (Stephi) - KSC-Leiterin, nicht im Tagesgeschäft ---
     e = Employee("Stucki Stephanie", "Stephi", 100)
     for d in range(5):
         for s in range(2):
-            e.available[(d, s)] = True
+            e.available[(d, s)] = False  # Nicht im Tagesgeschäft
     employees["Stephi"] = e
 
     return employees
@@ -420,11 +420,7 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # 1. FESTE ZUWEISUNGEN
     # ========================================
 
-    # Stephi (KSC-Leiterin) jeden Tag KGT
-    if "Stephi" in employees:
-        for d in range(5):
-            for s in range(2):
-                sched.assign("Stephi", d, s, "KGT")
+    # Stephi (KSC-Leiterin) — nicht im Tagesgeschäft, kein Eintrag im Plan
 
     # Maria B. Montagmorgen HO
     if "Maria B." in employees:
@@ -735,6 +731,51 @@ def save_state(state, filepath):
 # EXCEL-AUSGABE
 # ============================================================
 
+def _write_tv_merged_row(ws, row, tv_dict, names_for_row, thin_border):
+    """Schreibt eine TV-Zeile mit gemerged Blöcken für die angegebenen TL-Namen."""
+    halbtage = [(d, s) for d in range(5) for s in range(2)]
+
+    # Zusammenhängende Runs gleicher Namen finden
+    runs = []  # (start_col, end_col, name)
+    current_name = None
+    start_col = None
+    end_col = None
+    for i, (day, slot) in enumerate(halbtage):
+        col = 3 + i
+        tv_name = tv_dict.get((day, slot), "")
+        show = tv_name if tv_name in names_for_row else ""
+        if show == current_name and show != "":
+            end_col = col
+        else:
+            if current_name and current_name != "":
+                runs.append((start_col, end_col, current_name))
+            current_name = show
+            start_col = col
+            end_col = col
+    if current_name and current_name != "":
+        runs.append((start_col, end_col, current_name))
+
+    # Alle Zellen erst leer + Border
+    for col in range(3, 13):
+        c = ws.cell(row=row, column=col, value="")
+        c.border = thin_border
+
+    # Runs schreiben + mergen
+    for s_col, e_col, name in runs:
+        color = TV_COLORS.get(name, 'FFFFFF')
+        for col in range(s_col, e_col + 1):
+            c = ws.cell(row=row, column=col)
+            c.fill = PatternFill('solid', fgColor=color)
+            c.border = thin_border
+        # Text nur in der ersten Zelle des Runs
+        c = ws.cell(row=row, column=s_col, value=name)
+        c.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
+        c.alignment = Alignment(horizontal='center')
+        if e_col > s_col:
+            ws.merge_cells(start_row=row, start_column=s_col,
+                           end_row=row, end_column=e_col)
+
+
 def write_excel(sched, output_path):
     """Schreibt den Arbeitsplan als formatierte Excel-Datei."""
     wb = Workbook()
@@ -806,7 +847,6 @@ def write_excel(sched, output_path):
 
     # Mitarbeiter-Reihenfolge (wie im Bild)
     order = [
-        "Stephi",
         "Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
         "Isaura", "Martina", "Alessia", "Amra", "Nina",
         "Jesika", "Brigitte", "Florence", "Corinne", "Saskia",
@@ -868,27 +908,45 @@ def write_excel(sched, output_path):
         row += 1
 
     # ========================================
-    # Tagesverantwortung-Zeile (farbig pro Halbtag)
+    # Tagesverantwortung (2 Zeilen, farbig gemerged)
     # ========================================
     if sched.tagesverantwortung:
         row += 1  # Leerzeile
-        # Label
-        cell = ws.cell(row=row, column=1, value="Tagesverantwortung")
-        cell.font = Font(bold=True, size=9, name='Arial')
-        cell.border = thin_border
-        cell = ws.cell(row=row, column=2, value="")
-        cell.border = thin_border
+        tv = sched.tagesverantwortung
 
-        for day in range(5):
-            for slot in range(2):
-                col = 3 + day * 2 + slot
-                tv_name = sched.tagesverantwortung.get((day, slot), "")
-                cell = ws.cell(row=row, column=col, value=tv_name)
-                cell.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
-                cell.alignment = Alignment(horizontal='center')
-                cell.border = thin_border
-                if tv_name and tv_name in TV_COLORS:
-                    cell.fill = PatternFill('solid', fgColor=TV_COLORS[tv_name])
+        # TL-Namen in 2 Zeilen aufteilen: Zeile 1 = haupt/rest_tl, Zeile 2 = Linda
+        all_tv_names = set(tv.values())
+        linda_names = {n for n in all_tv_names if n == "Linda"}
+        other_names = all_tv_names - linda_names
+
+        # Zeile 1: haupt_tl + rest_tl
+        _write_tv_merged_row(ws, row, tv, other_names, thin_border)
+        names_sorted = sorted(other_names)
+        if len(names_sorted) >= 1:
+            c = ws.cell(row=row, column=1, value=names_sorted[0])
+            c.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
+            c.fill = PatternFill('solid', fgColor=TV_COLORS.get(names_sorted[0], 'FFFFFF'))
+            c.border = thin_border
+        if len(names_sorted) >= 2:
+            c = ws.cell(row=row, column=2, value=names_sorted[1])
+            c.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
+            c.fill = PatternFill('solid', fgColor=TV_COLORS.get(names_sorted[1], 'FFFFFF'))
+            c.border = thin_border
+        else:
+            ws.cell(row=row, column=2, value="").border = thin_border
+
+        # Zeile 2: Linda
+        row += 1
+        _write_tv_merged_row(ws, row, tv, linda_names, thin_border)
+        c = ws.cell(row=row, column=1, value="Silvana" if "Silvana" not in other_names else "")
+        c.border = thin_border
+        if linda_names:
+            c = ws.cell(row=row, column=2, value="Linda")
+            c.font = Font(bold=True, size=9, name='Arial', color='FFFFFF')
+            c.fill = PatternFill('solid', fgColor=TV_COLORS.get("Linda", 'FF00FF'))
+            c.border = thin_border
+        else:
+            ws.cell(row=row, column=2, value="").border = thin_border
 
     # ========================================
     # PHC-Liste / 18 Uhr Zeile (blau)
