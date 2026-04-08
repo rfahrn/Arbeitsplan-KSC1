@@ -229,11 +229,42 @@ def validate_week(sched, kw, employees):
         check("Verfügbarkeit: niemand arbeitet wenn frei", True)
 
     # ──────────────────────────────────────────
+    # REGEL 18: ONB-Ausschluss
+    # ──────────────────────────────────────────
+    no_onb = [n for n in employees if not employees[n].can_onb]
+    for name in no_onb:
+        has_onb = False
+        for day in range(5):
+            for slot in range(2):
+                t = sched.get_task(name, day, slot)
+                if "ONB" in t:
+                    has_onb = True
+        check(f"{name}: kein ONB", not has_onb,
+              "hat ONB zugewiesen!")
+
+    # ──────────────────────────────────────────
+    # REGEL 19: Brigitte Mo NM = ERF9
+    # ──────────────────────────────────────────
+    brig_mo_nm = sched.get_task("Brigitte", 0, 1)
+    check("Brigitte Mo NM = ERF9", "ERF9" in brig_mo_nm, f"hat: {brig_mo_nm}")
+
+    # ──────────────────────────────────────────
+    # SOFT-CHECK: TL 1-2x/Wo TEL
+    # ──────────────────────────────────────────
+    for name in employees:
+        if not employees[name].is_tl:
+            continue
+        tel_c = sum(1 for d in range(5) for s in range(2)
+                    if "TEL" in sched.get_task(name, d, s))
+        if tel_c == 0:
+            warn(f"TL {name}: 0x TEL diese Woche", "Soll: 1-2x")
+        elif tel_c > 2:
+            warn(f"TL {name}: {tel_c}x TEL diese Woche", "Soll: 1-2x")
+
+    # ──────────────────────────────────────────
     # HINWEISE (undefinierte Regeln)
     # ──────────────────────────────────────────
     print(f"\n  Hinweise (teilweise undefinierte Regeln):")
-    warn("TL 1-2x/Wo TEL", "TL nicht explizit definiert - manuell prüfen")
-    warn("Queue bei TL", "TL-Zuweisung manuell prüfen")
     warn("TL Tagesverantwortung Wechsel", "Nicht genau definiert")
     warn("TPA undefiniert NM möglich", "Nicht implementiert (undefiniert)")
     warn("Mi-Fr ERF9 Person", "Undefiniert - wird zufällig zugeteilt")
@@ -298,6 +329,30 @@ def validate_alternation(weeks_data):
                      for i in range(len(friday_tv_pattern)-1))
     check("Fr 18h-Liste wechselt", alternates,
           f"Pattern: {friday_tv_pattern}")
+
+    # Schalter-Gruppen-Stabilität: Personen mit SCH in Gruppe 0/1 sollen stabil sein
+    schalter_people_per_week = []
+    for kw, sched, state in weeks_data:
+        people_with_sch = set()
+        for name in sched.employees:
+            for day in range(5):
+                for slot in range(2):
+                    if "SCH" in sched.get_task(name, day, slot):
+                        people_with_sch.add(name)
+        schalter_people_per_week.append((state.get("schalter_group", "?"), people_with_sch))
+
+    # Prüfe: Gleiche Gruppe-Nummer sollte gleiche Personen haben
+    group_members = {}
+    stable = True
+    for group, people in schalter_people_per_week:
+        if people:  # nur wenn jemand Schalter hat
+            if group in group_members:
+                if group_members[group] != people:
+                    stable = False
+            else:
+                group_members[group] = people
+    check("Schalter-Gruppen stabil über Wochen", stable,
+          f"Gruppen-Mitglieder ändern sich zwischen gleicher Gruppenummer")
 
 
 # ──────────────────────────────────────────────────
