@@ -246,6 +246,15 @@ div.stButton > button[kind="secondary"]:hover {
   border-color: var(--border-2) !important;
 }
 
+/* Prevent vertical text wrapping in narrow button columns */
+div.stButton > button,
+div.stButton > button > div,
+div.stButton > button p {
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 div.stDownloadButton > button {
   background: var(--ok) !important;
   border: 1px solid var(--ok) !important;
@@ -1035,10 +1044,10 @@ def render_planung() -> None:
             label_visibility="collapsed",
         )
 
-        # Tage chips
+        # Tage chips — Day buttons + Alle/Keine on one row
         st.markdown('<div class="field-label" style="margin-top:10px;">Tage</div>',
                     unsafe_allow_html=True)
-        d_cols = st.columns([1, 1, 1, 1, 1, 0.6, 0.6, 2.4])
+        d_cols = st.columns([1, 1, 1, 1, 1, 0.4, 1.2, 1.4, 2.5])
         for i, lbl in enumerate(DAY_SHORTS):
             with d_cols[i]:
                 is_active = i in st.session_state.sel_days
@@ -1052,17 +1061,18 @@ def render_planung() -> None:
                     else:
                         st.session_state.sel_days.add(i)
                     st.rerun()
-        with d_cols[5]:
+        # d_cols[5] is a small visual spacer
+        with d_cols[6]:
             if st.button("Alle", key="day_all", type="secondary",
                          use_container_width=True):
                 st.session_state.sel_days = {0, 1, 2, 3, 4}
                 st.rerun()
-        with d_cols[6]:
+        with d_cols[7]:
             if st.button("Keine", key="day_none", type="secondary",
                          use_container_width=True):
                 st.session_state.sel_days = set()
                 st.rerun()
-        with d_cols[7]:
+        with d_cols[8]:
             if st.button("＋  Hinzufügen", key="add_entry",
                          type="primary", use_container_width=True):
                 if not st.session_state.sel_days:
