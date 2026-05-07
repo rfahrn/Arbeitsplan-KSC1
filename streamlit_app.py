@@ -29,15 +29,54 @@ for p in (str(BASE_DIR), str(APP_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+import arbeitskalender as _ak  # noqa: E402
 from arbeitskalender import (  # noqa: E402
     DAYS,
     SLOTS,
+    Employee,
     build_schedule,
     create_employees,
     get_next_monday,
     validate_schedule,
     write_excel,
 )
+
+# ── Monkey-patch create_employees so user-edited team is honoured ─────
+_ORIG_CREATE_EMPLOYEES = _ak.create_employees
+
+
+def _patched_create_employees(week_number: int):
+    base = _ORIG_CREATE_EMPLOYEES(week_number)
+    team = st.session_state.get("team")
+    if not team:
+        return base
+    out: dict = {}
+    for entry in team:
+        if not entry.get("active", True):
+            continue
+        short = entry["short"]
+        pct = int(entry["pct"])
+        if entry.get("is_default") and short in base:
+            emp = base[short]
+            emp.pct = pct
+            out[short] = emp
+        elif not entry.get("is_default"):
+            new_emp = Employee(
+                name=entry["name"],
+                short=short,
+                pct=pct,
+                can_schalter=True,
+                can_scanning=True,
+                can_onb=True,
+            )
+            for d in range(5):
+                for s in range(2):
+                    new_emp.available[(d, s)] = True
+            out[short] = new_emp
+    return out
+
+
+_ak.create_employees = _patched_create_employees
 
 # ── Konstanten ────────────────────────────────────────────────────────
 
@@ -251,9 +290,8 @@ div.stButton > button,
 div.stButton > button > div,
 div.stButton > button p {
   white-space: nowrap !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+div.stButton > button { padding-left: 6px !important; padding-right: 6px !important; }
 
 div.stDownloadButton > button {
   background: var(--ok) !important;
@@ -730,9 +768,52 @@ st.session_state.setdefault("result", None)
 st.session_state.setdefault("step", 1)              # 1 = Planung, 2 = Ergebnis
 st.session_state.setdefault("sel_days", set())
 st.session_state.setdefault("sel_slot", "Ganzer Tag")
-st.session_state.setdefault("f_employee", EMPLOYEE_LIST[0])
 st.session_state.setdefault("f_type", "Krank")
 st.session_state.setdefault("f_note", "")
+
+
+def _init_team() -> None:
+    """Seed the editable team list from the scheduler's defaults."""
+    if "team" in st.session_state and st.session_state.team:
+        return
+    defaults = _ORIG_CREATE_EMPLOYEES(1)
+    seed = []
+    for short in EMPLOYEE_LIST:
+        if short not in defaults:
+            continue
+        emp = defaults[short]
+        seed.append({
+            "short": short,
+            "name": emp.name,
+            "pct": emp.pct,
+            "active": True,
+            "is_default": True,
+        })
+    st.session_state.team = seed
+
+
+_init_team()
+
+
+# ── Apply pending widget clears (must happen BEFORE widgets render) ───
+if st.session_state.pop("_pending_clear_note", False):
+    st.session_state["f_note"] = ""
+if st.session_state.pop("_pending_clear_new_person", False):
+    for k in ("new_name", "new_short"):
+        st.session_state[k] = ""
+
+
+def active_shorts() -> list[str]:
+    return [e["short"] for e in st.session_state.team if e.get("active", True)]
+
+
+# Default for the Mitarbeiterin dropdown — first active member
+if "f_employee" not in st.session_state:
+    a = active_shorts()
+    st.session_state["f_employee"] = a[0] if a else EMPLOYEE_LIST[0]
+elif st.session_state["f_employee"] not in active_shorts():
+    a = active_shorts()
+    st.session_state["f_employee"] = a[0] if a else EMPLOYEE_LIST[0]
 
 
 # ── Plan-Generierung ───────────────────────────────────────────────────
@@ -805,7 +886,8 @@ def run_generation() -> None:
     phc_liste = [sched.phc_liste.get(d, "?") for d in range(5)]
 
     rows = []
-    for short in EMPLOYEE_LIST:
+    team_order = [e["short"] for e in st.session_state.team if e.get("active", True)]
+    for short in team_order:
         if short not in sched.employees:
             continue
         emp = sched.employees[short]
@@ -986,7 +1068,112 @@ st.markdown(
 #  STEP 1 — PLANUNG
 # ════════════════════════════════════════════════════════════════════════
 
+def render_team_management() -> None:
+    """Editable team list — pension, active flag, add/remove persons."""
+    n_active = sum(1 for e in st.session_state.team if e.get("active", True))
+    n_total = len(st.session_state.team)
+    label = f"👥  Team verwalten · {n_active}/{n_total} aktiv  (Pensum & Personen anpassen)"
+    with st.expander(label, expanded=False):
+        st.caption(
+            "Pensum pro Person via Dropdown anpassen, Personen aktivieren / "
+            "deaktivieren, oder neue Personen hinzufügen. Änderungen wirken "
+            "auf die nächste Plan-Generierung."
+        )
+
+        # Header row
+        h = st.columns([3, 1.5, 1.2, 0.8, 0.6])
+        h[0].markdown("**Name**")
+        h[1].markdown("**Kurzform**")
+        h[2].markdown("**Pensum**")
+        h[3].markdown("**Aktiv**")
+        h[4].markdown("&nbsp;", unsafe_allow_html=True)
+
+        pct_options = list(range(10, 110, 10))
+        for idx, entry in enumerate(st.session_state.team):
+            r = st.columns([3, 1.5, 1.2, 0.8, 0.6])
+            tag = "" if entry["is_default"] else "  ·  ✨ neu"
+            r[0].markdown(f"{entry['name']}{tag}")
+            r[1].markdown(f"`{entry['short']}`")
+            cur = entry["pct"]
+            try:
+                idx_pct = pct_options.index(cur)
+            except ValueError:
+                idx_pct = pct_options.index(min(pct_options, key=lambda v: abs(v - cur)))
+            new_pct = r[2].selectbox(
+                "Pensum", pct_options, index=idx_pct,
+                key=f"team_pct_{idx}", label_visibility="collapsed",
+                format_func=lambda v: f"{v}%",
+            )
+            new_active = r[3].checkbox(
+                "Aktiv", value=entry["active"],
+                key=f"team_act_{idx}", label_visibility="collapsed",
+            )
+            entry["pct"] = new_pct
+            entry["active"] = new_active
+
+            if not entry["is_default"]:
+                if r[4].button("✕", key=f"team_rm_{idx}", help="Person entfernen"):
+                    st.session_state.team.pop(idx)
+                    st.rerun()
+            else:
+                r[4].markdown("&nbsp;", unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("**Neue Person hinzufügen**")
+        nc = st.columns([3, 1.5, 1.2, 1.5])
+        nc[0].text_input(
+            "Voller Name", key="new_name",
+            placeholder="z.B. Mustermann Anna",
+            label_visibility="collapsed",
+        )
+        nc[1].text_input(
+            "Kurzform", key="new_short",
+            placeholder="Anna",
+            label_visibility="collapsed",
+        )
+        nc[2].selectbox(
+            "Pensum", pct_options, index=9,  # 100%
+            key="new_pct", label_visibility="collapsed",
+            format_func=lambda v: f"{v}%",
+        )
+        if nc[3].button("＋  Person hinzufügen", key="new_add",
+                        type="primary", use_container_width=True):
+            name = (st.session_state.get("new_name") or "").strip()
+            short = (st.session_state.get("new_short") or "").strip()
+            if not name or not short:
+                st.warning("Bitte Voller Name und Kurzform angeben.")
+            elif any(e["short"] == short for e in st.session_state.team):
+                st.warning(f"Kurzform „{short}\" ist bereits vergeben.")
+            else:
+                st.session_state.team.append({
+                    "short": short,
+                    "name": name,
+                    "pct": int(st.session_state.get("new_pct", 100)),
+                    "active": True,
+                    "is_default": False,
+                })
+                st.session_state["_pending_clear_new_person"] = True
+                st.rerun()
+
+        st.markdown("---")
+        rcol1, rcol2 = st.columns([1, 4])
+        with rcol1:
+            if st.button("↺  Auf Standard zurücksetzen", key="team_reset"):
+                st.session_state.pop("team", None)
+                _init_team()
+                st.rerun()
+        with rcol2:
+            st.caption(
+                "Hinweis: Neue Personen erhalten standardmässig volle "
+                "Wochenverfügbarkeit und alle Basis-Skills (Schalter, "
+                "Scanning, ONB). Die fest verdrahteten Spezial-Tasks "
+                "(z.B. Brigitte = ERF9 Mo, Dipiga = TAGES PA Di) bleiben "
+                "an die Originalnamen gebunden."
+            )
+
+
 def render_planung() -> None:
+    render_team_management()
     left, right = st.columns([1.25, 1])
 
     # ─── Left card: Form ─────────────────────────────────────────
@@ -1005,7 +1192,7 @@ def render_planung() -> None:
             st.markdown('<div class="field-label">Mitarbeiterin</div>',
                         unsafe_allow_html=True)
             st.selectbox(
-                "Mitarbeiterin", EMPLOYEE_LIST,
+                "Mitarbeiterin", active_shorts(),
                 key="f_employee", label_visibility="collapsed",
             )
         with f2:
@@ -1044,10 +1231,10 @@ def render_planung() -> None:
             label_visibility="collapsed",
         )
 
-        # Tage chips — Day buttons + Alle/Keine on one row
+        # Tage chips — day buttons on row 1
         st.markdown('<div class="field-label" style="margin-top:10px;">Tage</div>',
                     unsafe_allow_html=True)
-        d_cols = st.columns([1, 1, 1, 1, 1, 0.4, 1.2, 1.4, 2.5])
+        d_cols = st.columns(5)
         for i, lbl in enumerate(DAY_SHORTS):
             with d_cols[i]:
                 is_active = i in st.session_state.sel_days
@@ -1061,18 +1248,20 @@ def render_planung() -> None:
                     else:
                         st.session_state.sel_days.add(i)
                     st.rerun()
-        # d_cols[5] is a small visual spacer
-        with d_cols[6]:
+
+        # Alle / Keine / Hinzufügen on row 2
+        a_cols = st.columns([1, 1, 4, 2])
+        with a_cols[0]:
             if st.button("Alle", key="day_all", type="secondary",
                          use_container_width=True):
                 st.session_state.sel_days = {0, 1, 2, 3, 4}
                 st.rerun()
-        with d_cols[7]:
+        with a_cols[1]:
             if st.button("Keine", key="day_none", type="secondary",
                          use_container_width=True):
                 st.session_state.sel_days = set()
                 st.rerun()
-        with d_cols[8]:
+        with a_cols[3]:
             if st.button("＋  Hinzufügen", key="add_entry",
                          type="primary", use_container_width=True):
                 if not st.session_state.sel_days:
@@ -1094,8 +1283,10 @@ def render_planung() -> None:
                         "note": note,
                         "task": task,
                     })
+                    # Pending-clear pattern: Streamlit forbids mutating a
+                    # widget-bound key after it was instantiated this run.
                     st.session_state.sel_days = set()
-                    st.session_state.f_note = ""
+                    st.session_state["_pending_clear_note"] = True
                     st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
