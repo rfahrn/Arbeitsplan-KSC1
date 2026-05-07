@@ -334,23 +334,28 @@ class Schedule:
 def build_schedule(week_number, week_start_date, overrides=None, state_file="scheduler_state.json"):
     employees = create_employees(week_number)
     sched = Schedule(employees, week_number, week_start_date)
-    
+
+    # Seed the random generator from the calendar week so each week's random
+    # picks (TEL/ABKL/ERF8/ERF9/HUB filler, PHC fallbacks) are deterministic
+    # *and* different from the neighbouring week.
+    random.seed(week_number * 7919)
+
     state = load_state(state_file)
-    
-    last_week = state.get("last_generated_week", 0)
-    is_new_week = (last_week != week_number)
-    
-    if is_new_week:
-        state["last_generated_week"] = week_number
-        state["linda_ho_week"] = not state.get("linda_ho_week", False)
-        state["labor_jesika"] = not state.get("labor_jesika", True)
-        state["schalter_group"] = 1 - state.get("schalter_group", 0)
-        state["friday_phc_corinne"] = not state.get("friday_phc_corinne", True)
-        state["tl_monday_idx"] = (state.get("tl_monday_idx", 0) + 1) % 3
-        state["tv_start_day"] = (state.get("tv_start_day", 0) + 1) % 4
-        state["onb_idx"] = (state.get("onb_idx", 0) + 1) % len(ONB_ERLAUBT)
-        state["direkt_idx"] = (state.get("direkt_idx", 0) + 1) % len(DIREKT_ERLAUBT)
-        state["btm_idx"] = (state.get("btm_idx", 0) + 1) % len(BTM_ERLAUBT)
+
+    # Rotations are pure functions of the ISO calendar week so that consecutive
+    # weeks (KW20 vs KW21) always look different, regardless of generation order
+    # or the contents of the state file. The state file is still loaded / saved
+    # for backward compatibility but no longer drives the rotation pattern.
+    state["last_generated_week"] = week_number
+    state["linda_ho_week"] = (week_number % 2 == 1)
+    state["labor_jesika"] = (week_number % 2 == 0)
+    state["schalter_group"] = week_number % 2
+    state["friday_phc_corinne"] = (week_number % 2 == 0)
+    state["tl_monday_idx"] = week_number % 3
+    state["tv_start_day"] = week_number % 3
+    state["onb_idx"] = week_number % len(ONB_ERLAUBT)
+    state["direkt_idx"] = week_number % len(DIREKT_ERLAUBT)
+    state["btm_idx"] = week_number % len(BTM_ERLAUBT)
     
     # Overrides verarbeiten
     if overrides:

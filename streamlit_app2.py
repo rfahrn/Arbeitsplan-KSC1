@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-KSC Arbeitsplan — Streamlit-Variante (Light-UI)
-================================================
-Spiegelt die geplante neue Dashboard-Oberfläche:
-- helles Theme, Stepper "1 Planung / 2 Ergebnis"
-- klarer Wochenplan als grosse Tabelle mit TV-Pills im Tagesheader
-- Pill-förmige Task-Zellen, dunkelblaue PHC-Markierung
+KSC Arbeitsplan — Streamlit-Variante v2 (Test-Build)
+=====================================================
+Identisch zur Hauptvariante, plus:
+- Live-Regenerierung: Klick auf ‹ / › auf der Ergebnis-Seite plant die
+  neue Kalenderwoche sofort neu mit den bestehenden Step-1-Eingaben
+  (Abwesenheiten, Team, Pensum). Step 1 dient nur noch dem Anpassen der
+  Eingaben; die Resultate für KW+1, KW+2, … werden automatisch erzeugt.
 
 Start:
     pip install streamlit openpyxl
-    streamlit run streamlit_app.py
+    streamlit run streamlit_app2.py
 """
 
 from __future__ import annotations
@@ -1010,6 +1011,11 @@ with hcol[2]:
         if st.button("‹", key="wk_prev", help="Woche zurück", use_container_width=True):
             if st.session_state.week_offset > 0:
                 st.session_state.week_offset -= 1
+                if st.session_state.step == 2 and st.session_state.result is not None:
+                    try:
+                        run_generation()
+                    except Exception as exc:
+                        st.error(f"Fehler beim Generieren: {exc}")
                 st.rerun()
     with w2:
         st.markdown(
@@ -1026,6 +1032,11 @@ with hcol[2]:
     with w3:
         if st.button("›", key="wk_next", help="Woche vor", use_container_width=True):
             st.session_state.week_offset += 1
+            if st.session_state.step == 2 and st.session_state.result is not None:
+                try:
+                    run_generation()
+                except Exception as exc:
+                    st.error(f"Fehler beim Generieren: {exc}")
             st.rerun()
 
 # KW badge

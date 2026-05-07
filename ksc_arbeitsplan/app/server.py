@@ -229,7 +229,7 @@ async def api_generate(req: GenerateRequest) -> JSONResponse:
     warnings = check_rule_impact(absences, employees) if absences else []
 
     # Plan bauen
-    random.seed(kw + req.week_offset)
+    random.seed(kw)
     sched = build_schedule(
         kw, monday, overrides, state_file=str(STATE_FILE)
     )

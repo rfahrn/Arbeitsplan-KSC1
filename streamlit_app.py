@@ -886,7 +886,7 @@ def run_generation() -> None:
 
     warnings = check_rule_impact(absences, employees) if absences else []
 
-    random.seed(kw + st.session_state.week_offset)
+    random.seed(kw)
     sched = build_schedule(kw, monday, overrides, state_file=str(STATE_FILE))
     for key, n in extra_notes.items():
         sched.notes[key] = n
