@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-KSC Arbeitsplan — Streamlit-Variante
-====================================
-Spiegelt die FastAPI/HTML-Oberfläche (siehe ksc_arbeitsplan/app/) als
-Streamlit-App, damit die Anwendung ohne Docker zum Testen geteilt werden
-kann.
+KSC Arbeitsplan — Streamlit-Variante (Light-UI)
+================================================
+Spiegelt die geplante neue Dashboard-Oberfläche:
+- helles Theme, Stepper "1 Planung / 2 Ergebnis"
+- klarer Wochenplan als grosse Tabelle mit TV-Pills im Tagesheader
+- Pill-förmige Task-Zellen, dunkelblaue PHC-Markierung
 
 Start:
     pip install streamlit openpyxl
@@ -57,27 +58,37 @@ ABSENCE_TYPES = {
 
 DAY_SHORTS = ["Mo", "Di", "Mi", "Do", "Fr"]
 
-TASK_STYLE = {
-    "KTG": "#A9D18E", "KGS": "#A9D18E",
-    "ABKL": "#FFC000",
-    "TEL": "#92D050",
-    "ERF7": "#00B0F0", "ERF7/Q": "#00B0F0", "ERF7/HUB": "#00B0F0",
-    "ERF8": "#FF6600", "ERF8/Q": "#FF6600", "ERF8/HUB": "#FF6600",
-    "ERF9": "#FF0000", "ERF9/Q": "#FF0000", "ERF9/TEL": "#FF0000",
-    "ERF4/SCH": "#C6EFCE",
-    "ERF5": "#F4B084",
-    "PO": "#D6DCE4",
-    "PO/ABKL": "#FFC000",
-    "PO/TEL": "#92D050",
-    "PO/SCAN": "#A9D18E",
-    "HO": "#BDD7EE", "HO/Q": "#BDD7EE",
-    "VBZ/Q": "#C5E0B4",
-    "KSC Spez.": "#FFFF00",
-    "TAGES PA": "#00FFFF", "TAGESPA": "#00FFFF",
-    "RX Abo": "#D9D9D9",
-    "KRANK": "#FF9999",
-    "FERIEN": "#F2F2F2",
-    "scanning": "#E2EFDA",
+# Pastellfarben für die Pill-Zellen — bg + dunklere Schrift
+TASK_PILL = {
+    "TEL":      ("#D6F0DE", "#1E6F3D"),
+    "ABKL":     ("#FFE9B0", "#7A4F00"),
+    "KTG":      ("#D6F0DE", "#1E6F3D"),
+    "KGS":      ("#D6F0DE", "#1E6F3D"),
+    "ERF7":     ("#DCEAF7", "#1F4E79"),
+    "ERF7/Q":   ("#DCEAF7", "#1F4E79"),
+    "ERF7/HUB": ("#FFE0CC", "#9C5400"),
+    "ERF8":     ("#FFD9D2", "#8C2A1C"),
+    "ERF8/Q":   ("#FFD9D2", "#8C2A1C"),
+    "ERF8/HUB": ("#FFE0CC", "#9C5400"),
+    "ERF9":     ("#FFD0D0", "#9B1C1C"),
+    "ERF9/Q":   ("#FFD0D0", "#9B1C1C"),
+    "ERF9/TEL": ("#FFD0D0", "#9B1C1C"),
+    "ERF4/SCH": ("#E2EFDA", "#386641"),
+    "ERF5":     ("#FCE4D6", "#9C4A1A"),
+    "PO":       ("#E7E6E6", "#3F3F3F"),
+    "PO/SCAN":  ("#E7E6E6", "#3F3F3F"),
+    "PO/ABKL":  ("#FFE9B0", "#7A4F00"),
+    "PO/TEL":   ("#D6F0DE", "#1E6F3D"),
+    "HO":       ("#DDEBF7", "#1F4E79"),
+    "HO/Q":     ("#DDEBF7", "#1F4E79"),
+    "VBZ/Q":    ("#E2EFDA", "#386641"),
+    "KSC Spez.":("#FFF2CC", "#806000"),
+    "TAGES PA": ("#CFEFFA", "#0E6E8C"),
+    "TAGESPA":  ("#CFEFFA", "#0E6E8C"),
+    "RX Abo":   ("#E7E6E6", "#3F3F3F"),
+    "KRANK":    ("#FFC7CE", "#9C0006"),
+    "FERIEN":   ("#F2F2F2", "#595959"),
+    "scanning": ("#E2EFDA", "#386641"),
 }
 
 OUTPUT_DIR = Path(os.environ.get("KSC_OUTPUT_DIR", BASE_DIR / "output"))
@@ -93,232 +104,517 @@ st.set_page_config(
     page_title="KSC Arbeitsplan",
     page_icon="📅",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 CUSTOM_CSS = """
 <style>
 :root {
-  --bg:#0b1020; --panel:#141b2d; --panel-2:#1a2338; --elev:#1f2940;
-  --border:#273149; --border-2:#324061;
-  --text:#e6ebf5; --text-dim:#94a3b8; --text-mute:#64748b; --heading:#ffffff;
-  --accent:#6366f1; --accent-2:#8b5cf6;
-  --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --info:#38bdf8;
+  --bg:        #f4f6fb;
+  --surface:   #ffffff;
+  --surface-2: #f8fafc;
+  --border:    #e3e8f0;
+  --border-2:  #cbd5e1;
+  --text:      #0f172a;
+  --text-dim:  #475569;
+  --text-mute: #94a3b8;
+  --heading:   #0b1020;
+  --primary:   #0f172a;
+  --primary-2: #1e293b;
+  --accent:    #2563eb;
+  --accent-soft: #dbeafe;
+  --ok:        #16a34a;
+  --ok-soft:   #dcfce7;
+  --warn:      #d97706;
+  --warn-soft: #fef3c7;
+  --err:       #dc2626;
+  --err-soft:  #fee2e2;
+  --phc:       #1e3a8a;
 }
+
 html, body, [data-testid="stAppViewContainer"] {
-  background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(99,102,241,.08), transparent 60%),
-    radial-gradient(900px 500px at 110% 10%, rgba(139,92,246,.06), transparent 60%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
 }
 [data-testid="stHeader"] { background: transparent; }
-[data-testid="stSidebar"] {
-  background: var(--panel);
-  border-right: 1px solid var(--border);
+[data-testid="stSidebar"] { display: none; }
+[data-testid="stSidebarCollapsedControl"] { display: none; }
+
+.block-container {
+  padding-top: 1.2rem !important;
+  padding-bottom: 2rem !important;
+  max-width: 1500px;
 }
-[data-testid="stSidebar"] * { color: var(--text); }
+
+/* ── Top Header Bar ─────────────────────────────────────────── */
+
+.topbar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+
 .brand {
-  display:flex; align-items:center; gap:12px;
-  padding: 4px 4px 16px; border-bottom:1px solid var(--border);
-  margin-bottom:14px;
+  display: flex; align-items: center; gap: 12px;
 }
-.brand-mark {
-  width:42px; height:42px; border-radius:10px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color:white; font-weight:700; font-size:15px;
-  display:grid; place-items:center; letter-spacing:.5px;
-  box-shadow: 0 6px 20px rgba(99,102,241,.35);
+.brand-icon {
+  width: 38px; height: 38px; border-radius: 9px;
+  background: var(--primary); color: white;
+  display: grid; place-items: center; font-size: 18px;
 }
-.brand-title { font-size:16px; font-weight:700; color:var(--heading); line-height:1.1; }
-.brand-sub { font-size:11px; color:var(--text-dim); letter-spacing:.4px; text-transform:uppercase; }
+.brand-title { font-size: 15px; font-weight: 700; color: var(--heading); line-height: 1.1; }
+.brand-sub   { font-size: 10.5px; color: var(--text-mute); letter-spacing: .8px; text-transform: uppercase; }
 
-.page-title {
-  font-size:24px; font-weight:700; color:var(--heading);
-  margin: 0 0 4px 0; letter-spacing:-.3px;
+/* Stepper */
+.stepper { display: flex; align-items: center; gap: 8px; }
+.step {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: 999px;
+  background: transparent; color: var(--text-dim);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; user-select: none;
+  border: 1px solid transparent;
+  transition: all .15s;
 }
-.page-sub { color:var(--text-dim); margin:0; font-size:14px; }
-
-.kw-pill {
-  display:inline-flex; flex-direction:column; align-items:center;
-  background:var(--panel); border:1px solid var(--border);
-  padding:8px 18px; border-radius:10px; min-width:200px;
+.step:hover { background: var(--surface-2); }
+.step .num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text-dim);
+  display: grid; place-items: center;
+  font-size: 11.5px; font-weight: 700;
+  border: 1px solid var(--border);
 }
-.kw-big { font-size:15px; font-weight:700; color:var(--heading); }
-.kw-range { font-size:11px; color:var(--text-dim); }
-
-.card {
-  background: var(--panel);
-  border:1px solid var(--border);
-  border-radius:14px; padding: 18px 22px;
-  margin-bottom: 18px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.2);
-}
-.card-title {
-  font-size:16px; font-weight:600; color:var(--heading);
-  margin:0 0 12px 0; letter-spacing:-.2px;
-}
-.badge {
-  display:inline-block;
-  background: rgba(99,102,241,.16);
+.step.active {
+  background: var(--accent-soft);
   color: var(--accent);
-  padding: 4px 10px; border-radius: 999px;
-  font-size:11.5px; font-weight:600;
+  border-color: rgba(37,99,235,.18);
 }
-.stat {
-  background: var(--panel-2);
-  border:1px solid var(--border);
-  border-radius:10px; padding:14px 16px;
-}
-.stat-label {
-  font-size:11px; color:var(--text-mute);
-  letter-spacing:.5px; text-transform:uppercase;
-  font-weight:600; margin-bottom:6px;
-}
-.stat-value { font-size:20px; font-weight:700; color:var(--heading); }
+.step.active .num { background: var(--accent); color: white; border-color: var(--accent); }
+.step-sep { color: var(--text-mute); padding: 0 2px; font-weight: 300; }
 
-.info-strip {
-  display:flex; gap:12px; align-items:center;
-  background: rgba(56,189,248,.14);
-  border:1px solid rgba(56,189,248,.3);
-  padding:12px 16px; border-radius:10px;
-  margin-top: 12px;
+/* KW Pill */
+.kw-pill {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
 }
-.info-strip-icon {
-  width:22px; height:22px; border-radius:50%;
-  background:var(--info); color:#0b1020;
-  display:grid; place-items:center; font-weight:700; font-size:12px;
+.kw-center {
+  padding: 4px 14px; min-width: 170px; text-align: center;
 }
-.info-strip-text { font-size:13px; color:var(--text); }
+.kw-big   { display:block; font-size: 14px; font-weight: 700; color: var(--heading); }
+.kw-range { display:block; font-size: 11px; color: var(--text-mute); margin-top: 2px; }
 
-.entry-item {
-  background: var(--panel-2);
-  border:1px solid var(--border);
-  border-radius:8px; padding:10px 14px;
-  display:flex; align-items:center; gap:10px;
-  font-size:13px; margin-bottom:6px;
-}
-.entry-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.entry-dot.KRANK  { background:#ef4444; }
-.entry-dot.FERIEN { background:#f59e0b; }
-.entry-dot.TERMIN { background:#38bdf8; }
-.entry-dot.HO     { background:#6366f1; }
-.entry-dot.CUSTOM { background:#64748b; }
-.entry-name { font-weight:600; color:var(--text); }
-.entry-meta { color:var(--text-dim); margin-left:6px; }
-.entry-note { color:#fbbf24; font-style:italic; margin-left:6px; }
-
-.entries-empty {
-  padding:22px; text-align:center; color:var(--text-mute);
-  font-size:13px; background:var(--panel-2);
-  border:1px dashed var(--border); border-radius:10px;
+.badge-kw {
+  background: #f1f5f9; color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase;
 }
 
-.banner {
-  padding:14px 18px; border-radius:10px;
-  margin-bottom:14px; font-size:13.5px; line-height:1.55;
-  border:1px solid;
-}
-.banner h4 { margin:0 0 8px; font-size:13px; color:var(--heading); }
-.banner ul { margin:0; padding-left:20px; }
-.banner-ok    { background:rgba(34,197,94,.14);  border-color:rgba(34,197,94,.3);  color:#22c55e; font-weight:500; }
-.banner-warn  { background:rgba(245,158,11,.14); border-color:rgba(245,158,11,.3); color:#fbbf24; }
-.banner-error { background:rgba(239,68,68,.14);  border-color:rgba(239,68,68,.3);  color:#fca5a5; }
-
-.cov-card {
-  background:var(--panel-2); border:1px solid var(--border);
-  border-radius:8px; padding:12px 14px;
-  display:flex; flex-direction:column; gap:6px;
-  font-size:12.5px;
-}
-.cov-head {
-  display:flex; justify-content:space-between;
-  font-size:12.5px; color:var(--text-dim);
-}
-.cov-day { color:var(--text); font-weight:600; }
-.cov-row { display:flex; justify-content:space-between; align-items:center; }
-.cov-badge { padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; }
-.cov-ok { background: rgba(34,197,94,.14); color:#22c55e; }
-.cov-bad { background: rgba(239,68,68,.14); color:#ef4444; }
-
-.pill {
-  background:var(--panel-2); border:1px solid var(--border);
-  border-radius:8px; padding:10px 14px;
-  display:flex; justify-content:space-between; align-items:center;
-  font-size:13px; margin-bottom:6px;
-}
-.pill-day { color:var(--text-dim); font-weight:500; }
-.pill-val { color:var(--heading); font-weight:600; }
-.pill-val.open { color: var(--warn); }
-
-.wa-card {
-  background:var(--panel-2);
-  border:1px solid var(--border);
-  border-left:3px solid var(--accent);
-  border-radius:8px; padding:12px 16px;
-}
-.wa-label {
-  font-size:11px; color:var(--text-mute);
-  text-transform:uppercase; letter-spacing:.5px;
-  font-weight:600; margin-bottom:4px;
-}
-.wa-val { color:var(--heading); font-weight:600; font-size:14px; }
-
-.schedule-wrap {
-  overflow-x:auto;
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:var(--panel-2);
-}
-table.schedule {
-  width:100%; border-collapse:collapse;
-  font-size:11.5px; font-family: "JetBrains Mono", Consolas, monospace;
-  min-width: 900px;
-}
-table.schedule th, table.schedule td {
-  padding:6px 8px; text-align:center;
-  border-right:1px solid var(--border);
-  border-bottom:1px solid var(--border);
-  white-space:nowrap; color:#0b1020;
-}
-table.schedule th {
-  background:#1e293b; color:var(--text);
-  font-weight:600; font-family:"Inter", sans-serif;
-  font-size:11px; padding:8px 6px;
-}
-table.schedule th.day-col {
-  background: linear-gradient(135deg, #334155, #1e293b);
-  color:white;
-}
-table.schedule td.name-col {
-  text-align:left; background:var(--panel);
-  color:var(--text); font-family:"Inter", sans-serif;
-  font-size:12px; font-weight:500; padding-left:14px;
-}
-table.schedule td.pct-col {
-  background:var(--panel-2); color:var(--text-dim);
-  font-family:"Inter", sans-serif; font-size:11.5px; width:44px;
-}
-table.schedule td.cell-phc {
-  background:#0070C0 !important; color:white !important; font-weight:700;
-}
-.tiny-hint { color:var(--text-mute); font-size:11.5px; margin-top:8px; }
-
-.section-title {
-  font-size:13px; font-weight:600; color:var(--heading);
-  letter-spacing:.3px; text-transform:uppercase;
-  margin: 18px 0 10px;
-}
-
+/* CTA Button (mache native primary buttons dunkel) */
 div.stButton > button[kind="primary"] {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  border:none; color:white; font-weight:600;
-  box-shadow: 0 8px 22px rgba(99,102,241,.35);
+  background: var(--primary) !important;
+  border: 1px solid var(--primary) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  border-radius: 9px !important;
+  padding: 8px 18px !important;
+  box-shadow: 0 2px 6px rgba(15,23,42,.18) !important;
 }
 div.stButton > button[kind="primary"]:hover {
-  filter: brightness(1.08);
+  background: var(--primary-2) !important;
+  border-color: var(--primary-2) !important;
   transform: translateY(-1px);
 }
+
+/* Secondary buttons (light) */
+div.stButton > button[kind="secondary"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+}
+div.stButton > button[kind="secondary"]:hover {
+  background: var(--surface-2) !important;
+  border-color: var(--border-2) !important;
+}
+
+div.stDownloadButton > button {
+  background: var(--ok) !important;
+  border: 1px solid var(--ok) !important;
+  color: white !important;
+  border-radius: 9px !important;
+  font-weight: 600 !important;
+}
+div.stDownloadButton > button:hover { filter: brightness(1.08); }
+
+/* Inputs */
+div[data-baseweb="select"] > div,
+.stTextInput input,
+.stMultiSelect div[data-baseweb="select"] > div {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  border-radius: 8px !important;
+}
+.stTextInput input { color: var(--text) !important; }
+
+/* ── Stats Strip ────────────────────────────────────────────── */
+
+.stats-strip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  display: flex; gap: 36px; align-items: center;
+  flex-wrap: wrap;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.stat-item .lbl {
+  font-size: 10.5px; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .8px;
+  font-weight: 600; margin-bottom: 4px;
+}
+.stat-item .val {
+  font-size: 18px; font-weight: 700; color: var(--heading);
+  font-feature-settings: "tnum";
+}
+.stat-item .val small { font-size: 11.5px; font-weight: 500; color: var(--text-dim); margin-left: 4px; }
+.stat-divider {
+  height: 32px; width: 1px; background: var(--border);
+}
+.info-pill {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+}
+.info-pill .ico {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #2563eb; color: white;
+  display: grid; place-items: center;
+  font-size: 10px; font-weight: 700;
+}
+
+/* ── Cards ──────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.card h2 {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--heading);
+  margin: 0 0 4px;
+  letter-spacing: -.1px;
+}
+.card .sub {
+  font-size: 12.5px; color: var(--text-mute);
+  margin-bottom: 14px;
+}
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.field-label {
+  font-size: 10.5px; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .8px;
+  font-weight: 700; margin: 0 0 6px 2px;
+}
+
+/* Segmented control (Halbtag) */
+.seg-row { display: flex; gap: 0; }
+.seg {
+  flex: 1; padding: 8px 14px;
+  text-align: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px; color: var(--text-dim);
+  cursor: pointer; user-select: none;
+  font-weight: 500;
+}
+.seg:first-child  { border-radius: 8px 0 0 8px; }
+.seg:last-child   { border-radius: 0 8px 8px 0; }
+.seg + .seg { border-left: none; }
+.seg.active {
+  background: var(--surface-2);
+  color: var(--heading);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--border-2);
+}
+
+/* Day chips */
+.day-chip-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.day-chip {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  cursor: pointer; user-select: none;
+  min-width: 44px; text-align: center;
+}
+.day-chip.active {
+  background: var(--accent-soft);
+  border-color: rgba(37,99,235,.35);
+  color: var(--accent);
+}
+.day-link {
+  color: var(--text-mute); font-size: 12.5px;
+  background: transparent; border: none;
+  padding: 4px 6px; cursor: pointer;
+}
+.day-link:hover { color: var(--text-dim); }
+
+/* Empty state */
+.empty-state {
+  padding: 40px 18px; text-align: center;
+  color: var(--text-mute); font-size: 13px;
+}
+.empty-state .icon {
+  width: 44px; height: 44px; margin: 0 auto 10px;
+  border-radius: 12px; background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: grid; place-items: center;
+  color: var(--text-mute); font-size: 20px;
+}
+.empty-state .ttl { color: var(--text); font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+
+/* Entries list (right card) */
+.entries-list { display: flex; flex-direction: column; gap: 8px; }
+.entry-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 12px;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px;
+}
+.entry-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.entry-dot.KRANK  { background: var(--err); }
+.entry-dot.FERIEN { background: var(--warn); }
+.entry-dot.TERMIN { background: #06b6d4; }
+.entry-dot.HO     { background: var(--accent); }
+.entry-dot.CUSTOM { background: var(--text-mute); }
+.entry-name { font-weight: 600; color: var(--text); }
+.entry-meta { color: var(--text-dim); font-size: 12.5px; margin-left: 4px; }
+.entry-note { color: #b45309; font-style: italic; margin-left: 6px; font-size: 12px; }
+
+/* ── Banner ─────────────────────────────────────────────────── */
+
+.banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 16px; border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid;
+  font-size: 13.5px;
+}
+.banner .check {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; flex-shrink: 0;
+  font-weight: 700; font-size: 13px;
+}
+.banner-ok    { background: var(--ok-soft);  border-color: rgba(22,163,74,.3); color: #14532d; }
+.banner-ok    .check { background: var(--ok); color: white; }
+.banner-warn  { background: var(--warn-soft); border-color: rgba(217,119,6,.3); color: #78350f; }
+.banner-warn  .check { background: var(--warn); color: white; }
+.banner-error { background: var(--err-soft); border-color: rgba(220,38,38,.3); color: #7f1d1d; }
+.banner-error .check { background: var(--err); color: white; }
+.banner h4 { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+.banner ul { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
+
+/* ── Wochenplan Tabelle ─────────────────────────────────────── */
+
+.plan-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+table.plan {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 11.5px;
+  font-family: -apple-system, "Segoe UI", "Inter", sans-serif;
+  min-width: 1100px;
+  background: var(--surface);
+}
+table.plan th, table.plan td {
+  padding: 6px 6px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+table.plan th {
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-weight: 700; font-size: 10.5px;
+  letter-spacing: .6px; text-transform: uppercase;
+  text-align: center;
+}
+table.plan th.team-head {
+  text-align: left; padding: 10px 14px;
+  vertical-align: top;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+table.plan th.team-head .ttl { color: var(--text-dim); font-size: 10.5px; font-weight: 700; letter-spacing:.6px; }
+table.plan th.team-head .legend {
+  margin-top: 4px; color: var(--text-mute);
+  font-size: 10.5px; font-weight: 500;
+  text-transform: none; letter-spacing: 0;
+}
+table.plan th.day-head {
+  background: var(--surface);
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+table.plan th.day-head .day-name {
+  display: block;
+  color: var(--text-dim); font-weight: 700; font-size: 11px;
+  letter-spacing: .8px; text-transform: uppercase;
+}
+.tv-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 6px;
+  padding: 3px 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text);
+  text-transform: none; letter-spacing: 0;
+}
+.tv-tag {
+  background: #e0e7ff; color: #3730a3;
+  font-size: 9.5px; font-weight: 800;
+  padding: 1px 5px; border-radius: 4px;
+  letter-spacing: .4px;
+}
+.tv-pill.open .tv-name { color: var(--warn); }
+
+table.plan th.slot-head {
+  background: var(--surface-2);
+  font-size: 9.5px; padding: 5px 4px;
+  color: var(--text-mute); font-weight: 600;
+}
+
+table.plan td.name-cell {
+  background: var(--surface);
+  padding: 6px 12px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text); font-weight: 500;
+  white-space: nowrap;
+  position: sticky; left: 0;
+}
+table.plan td.pct-cell {
+  background: var(--surface);
+  text-align: right; padding-right: 14px;
+  color: var(--text-mute);
+  font-size: 11px; font-weight: 600;
+}
+
+table.plan tbody tr:nth-child(even) td.name-cell,
+table.plan tbody tr:nth-child(even) td.pct-cell {
+  background: var(--surface-2);
+}
+
+td.task-cell {
+  text-align: center;
+  padding: 5px 4px;
+  background: var(--surface);
+}
+table.plan tbody tr:nth-child(even) td.task-cell {
+  background: var(--surface-2);
+}
+
+.pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  font-feature-settings: "tnum";
+  letter-spacing: .2px;
+  min-width: 64px;
+  text-align: center;
+}
+.pill-phc {
+  background: var(--phc) !important;
+  color: white !important;
+  font-weight: 700;
+}
+.pill-empty { color: transparent; }
+.pill-termin { background: #fef3c7; color: #78350f; }
+
+/* ── Wochenaufgaben Strip ────────────────────────────────────── */
+
+.wa-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+.wa-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.wa-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: grid; place-items: center;
+  color: var(--text-dim); font-size: 14px;
+}
+.wa-meta .lbl {
+  font-size: 10px; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .8px;
+  font-weight: 700;
+}
+.wa-meta .val {
+  font-size: 14px; font-weight: 700; color: var(--heading);
+  margin-top: 2px;
+}
+
+/* Streamlit utility tweaks */
+.stMultiSelect [data-baseweb="tag"] {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+
+/* Hide the form submit hint */
+.stForm > [data-testid="stFormSubmitButton"] { margin-top: 6px; }
+
+hr { margin: 10px 0; border-color: var(--border); }
+
+/* Section titles inside cards */
+.sec-title {
+  font-size: 12px; font-weight: 700; color: var(--text-dim);
+  letter-spacing: .8px; text-transform: uppercase;
+  margin: 0 0 10px;
+}
+
+/* Generated content compactness */
+.element-container { margin-bottom: 0.4rem; }
 </style>
 """
 
@@ -347,17 +643,17 @@ def get_week_info(offset: int = 0) -> dict:
     }
 
 
-def style_for_task(task: str) -> tuple[str, str]:
+def pill_for_task(task: str) -> tuple[str, str]:
     if not task:
-        return "#ffffff", "#cbd5e1"
+        return "transparent", "transparent"
     if task.startswith("*"):
-        return "#facc15", "#1e293b"
-    if task in TASK_STYLE:
-        return TASK_STYLE[task], "#0b1020"
-    for key in sorted(TASK_STYLE.keys(), key=len, reverse=True):
+        return "#fef3c7", "#78350f"
+    if task in TASK_PILL:
+        return TASK_PILL[task]
+    for key in sorted(TASK_PILL.keys(), key=len, reverse=True):
         if task.startswith(key):
-            return TASK_STYLE[key], "#0b1020"
-    return "#ffffff", "#0b1020"
+            return TASK_PILL[key]
+    return "#f1f5f9", "#334155"
 
 
 def check_rule_impact(absences, employees):
@@ -419,507 +715,635 @@ def html_escape(s: str) -> str:
 
 # ── Session-State ──────────────────────────────────────────────────────
 
-if "week_offset" not in st.session_state:
-    st.session_state.week_offset = 0
-if "entries" not in st.session_state:
-    st.session_state.entries = []
-if "result" not in st.session_state:
-    st.session_state.result = None
+st.session_state.setdefault("week_offset", 0)
+st.session_state.setdefault("entries", [])
+st.session_state.setdefault("result", None)
+st.session_state.setdefault("step", 1)              # 1 = Planung, 2 = Ergebnis
+st.session_state.setdefault("sel_days", set())
+st.session_state.setdefault("sel_slot", "Ganzer Tag")
+st.session_state.setdefault("f_employee", EMPLOYEE_LIST[0])
+st.session_state.setdefault("f_type", "Krank")
+st.session_state.setdefault("f_note", "")
 
 
-# ── SIDEBAR ────────────────────────────────────────────────────────────
+# ── Plan-Generierung ───────────────────────────────────────────────────
 
-with st.sidebar:
+def run_generation() -> None:
+    cur_info = get_week_info(st.session_state.week_offset)
+    kw = cur_info["kw"]
+    monday = cur_info["monday"]
+
+    employees = create_employees(kw)
+    overrides: dict = {}
+    extra_notes: dict = {}
+    absences: list = []
+
+    for entry in st.session_state.entries:
+        if entry["name"] not in employees:
+            continue
+        task_code = ABSENCE_TYPES.get(entry["type"], "CUSTOM")
+        note = (entry.get("note") or "").strip()
+
+        if task_code == "TERMIN":
+            label = f"*{note}" if note else "*Termin"
+        elif task_code == "CUSTOM":
+            label = (entry.get("task") or "").strip() or "HO"
+        else:
+            label = task_code
+
+        for day in entry["days"]:
+            for slot in entry["slots"]:
+                if employees[entry["name"]].is_available(day, slot):
+                    overrides[(entry["name"], day, slot)] = label
+                    if note and task_code in ("KRANK", "FERIEN", "HO"):
+                        extra_notes[(entry["name"], day, slot)] = note
+                    if task_code in ("KRANK", "FERIEN") or label.startswith("*"):
+                        absences.append((entry["name"], day, slot))
+
+    warnings = check_rule_impact(absences, employees) if absences else []
+
+    random.seed(kw + st.session_state.week_offset)
+    sched = build_schedule(kw, monday, overrides, state_file=str(STATE_FILE))
+    for key, n in extra_notes.items():
+        sched.notes[key] = n
+
+    issues = validate_schedule(sched)
+
+    filename = f"Arbeitsplan_KW{kw}_{monday.strftime('%Y%m%d')}.xlsx"
+    output_path = OUTPUT_DIR / filename
+    write_excel(sched, str(output_path))
+    with open(output_path, "rb") as fh:
+        excel_bytes = fh.read()
+
+    coverage = []
+    for day in range(5):
+        for slot in range(2):
+            target_tel = 4 if (day == 0 and slot == 0) else 3
+            coverage.append({
+                "day": DAYS[day],
+                "slot": SLOTS[slot],
+                "tel": sched.tel_count[day][slot],
+                "tel_target": target_tel,
+                "abkl": sched.abkl_count[day][slot],
+                "abkl_target": 2,
+                "tel_ok": sched.tel_count[day][slot] >= target_tel,
+                "abkl_ok": sched.abkl_count[day][slot] >= 2,
+            })
+
+    tagesverantwortung = [
+        sched.tagesverantwortung.get(d, "?") for d in range(5)
+    ]
+    phc_liste = [sched.phc_liste.get(d, "?") for d in range(5)]
+
+    rows = []
+    for short in EMPLOYEE_LIST:
+        if short not in sched.employees:
+            continue
+        emp = sched.employees[short]
+        cells = []
+        for day in range(5):
+            for slot in range(2):
+                task = sched.get_task(short, day, slot)
+                is_phc = slot == 1 and sched.phc_liste.get(day) == short
+                cells.append({"task": task, "is_phc": is_phc})
+        rows.append({
+            "full_name": emp.name,
+            "short": short,
+            "pct": emp.pct,
+            "cells": cells,
+        })
+
+    st.session_state.result = {
+        "filename": filename,
+        "excel_bytes": excel_bytes,
+        "kw": kw,
+        "warnings": warnings,
+        "issues": issues,
+        "coverage": coverage,
+        "tagesverantwortung": tagesverantwortung,
+        "phc_liste": phc_liste,
+        "wochenaufgaben": {
+            "direkt": sched.wochenaufgabe_direkt,
+            "onb": sched.wochenaufgabe_onb,
+            "btm": sched.wochenaufgabe_btm,
+        },
+        "rows": rows,
+    }
+    st.session_state.step = 2
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  TOP HEADER
+# ════════════════════════════════════════════════════════════════════════
+
+info = get_week_info(st.session_state.week_offset)
+
+st.markdown('<div class="topbar">', unsafe_allow_html=True)
+hcol = st.columns([2.6, 2.4, 2.6, 1.0, 1.6])
+
+# Brand
+with hcol[0]:
     st.markdown(
         """
         <div class="brand">
-          <div class="brand-mark">KSC</div>
+          <div class="brand-icon">📅</div>
           <div>
             <div class="brand-title">Arbeitsplan</div>
-            <div class="brand-sub">Team-Scheduling</div>
+            <div class="brand-sub">KSC · Team-Scheduling</div>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown("**Navigation**")
-    st.markdown(
-        "- Woche\n- Abwesenheiten\n- Ergebnis",
-    )
-    st.markdown("---")
-    st.caption(f"Version 6.0 · 18 Personen")
 
+# Stepper (clickable)
+with hcol[1]:
+    s1, s2 = st.columns([1, 1])
+    with s1:
+        if st.button(
+            ("● 1   Planung" if st.session_state.step == 1 else "1   Planung"),
+            key="step1", use_container_width=True,
+            type=("primary" if st.session_state.step == 1 else "secondary"),
+        ):
+            st.session_state.step = 1
+            st.rerun()
+    with s2:
+        result_avail = st.session_state.result is not None
+        label2 = ("● 2   Ergebnis" if st.session_state.step == 2 else "2   Ergebnis")
+        if st.button(
+            label2, key="step2", use_container_width=True,
+            type=("primary" if st.session_state.step == 2 else "secondary"),
+            disabled=not result_avail,
+        ):
+            st.session_state.step = 2
+            st.rerun()
 
-# ── TOPBAR ─────────────────────────────────────────────────────────────
-
-info = get_week_info(st.session_state.week_offset)
-
-top_l, top_r = st.columns([3, 2])
-with top_l:
-    st.markdown(
-        '<h1 class="page-title">Wochenplan generieren</h1>'
-        '<p class="page-sub">Arbeitsplan für das KSC-Team — Montag bis Freitag</p>',
-        unsafe_allow_html=True,
-    )
-
-with top_r:
-    c1, c2, c3 = st.columns([1, 3, 1])
-    with c1:
-        if st.button("‹", key="wk_prev", help="Woche zurück"):
+# Week navigation
+with hcol[2]:
+    w1, w2, w3 = st.columns([1, 4, 1])
+    with w1:
+        if st.button("‹", key="wk_prev", help="Woche zurück", use_container_width=True):
             if st.session_state.week_offset > 0:
                 st.session_state.week_offset -= 1
                 st.rerun()
-    with c2:
+    with w2:
         st.markdown(
             f"""
-            <div class="kw-pill">
-              <span class="kw-big">KW {info['kw']}</span>
-              <span class="kw-range">{info['monday_str']} – {info['friday_str']}</span>
+            <div class="kw-pill" style="justify-content:center;">
+              <div class="kw-center">
+                <span class="kw-big">KW {info['kw']}</span>
+                <span class="kw-range">{info['monday_str']} – {info['friday_str']}</span>
+              </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-    with c3:
-        if st.button("›", key="wk_next", help="Woche vor"):
+    with w3:
+        if st.button("›", key="wk_next", help="Woche vor", use_container_width=True):
             st.session_state.week_offset += 1
             st.rerun()
 
-
-# ── SECTION: WOCHEN-INFO ───────────────────────────────────────────────
-
-st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown(
-    f"""
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2 class="card-title">Wochen-Kontext</h2>
-      <span class="badge">{'gerade KW' if info['is_even'] else 'ungerade KW'}</span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-sc = st.columns(4)
-stats = [
-    ("Kalenderwoche", str(info["kw"])),
-    ("Montag", info["monday_str"]),
-    ("Freitag", info["friday_str"]),
-    ("Team", "18"),
-]
-for col, (lbl, val) in zip(sc, stats):
-    col.markdown(
-        f'<div class="stat"><div class="stat-label">{lbl}</div>'
-        f'<div class="stat-value">{val}</div></div>',
+# KW badge
+with hcol[3]:
+    badge = "GERADE KW" if info["is_even"] else "UNGERADE KW"
+    st.markdown(
+        f'<div style="text-align:center; padding-top:10px;">'
+        f'<span class="badge-kw">{badge}</span></div>',
         unsafe_allow_html=True,
     )
 
+# Primary CTA — generate
+with hcol[4]:
+    cta_label = ("⬇ Excel" if st.session_state.step == 2 and st.session_state.result
+                 else "→ Plan generieren")
+    if st.session_state.step == 2 and st.session_state.result:
+        st.download_button(
+            "⬇  Excel herunterladen",
+            data=st.session_state.result["excel_bytes"],
+            file_name=st.session_state.result["filename"],
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="cta_download",
+        )
+    else:
+        if st.button("→  Plan generieren", key="cta_generate",
+                     type="primary", use_container_width=True):
+            with st.spinner("Plan wird generiert …"):
+                try:
+                    run_generation()
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Fehler beim Generieren: {exc}")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  STATS STRIP
+# ════════════════════════════════════════════════════════════════════════
+
+mo = info["monday_str"].replace(".", "."*1)
 notes_str = " · ".join(info["two_week_notes"])
 st.markdown(
     f"""
-    <div class="info-strip">
-      <div class="info-strip-icon">i</div>
-      <div class="info-strip-text">{html_escape(notes_str)}</div>
+    <div class="stats-strip">
+      <div class="stat-item">
+        <div class="lbl">Kalenderwoche</div>
+        <div class="val">{info['kw']}</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="lbl">Montag</div>
+        <div class="val">{info['monday_str']}</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="lbl">Freitag</div>
+        <div class="val">{info['friday_str']}</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="lbl">Team</div>
+        <div class="val">18 <small>Personen</small></div>
+      </div>
+      <div class="info-pill"><span class="ico">i</span><span>{html_escape(notes_str)}</span></div>
     </div>
     """,
     unsafe_allow_html=True,
 )
-st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ── SECTION: EINGABE ───────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════
+#  STEP 1 — PLANUNG
+# ════════════════════════════════════════════════════════════════════════
 
-st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown(
-    '<h2 class="card-title">Abwesenheit oder Sonderwunsch hinzufügen</h2>'
-    '<p style="color:#94a3b8; margin: -8px 0 14px; font-size:12.5px;">'
-    'Krankmeldung · Ferien · Termin · HO · eigene Regel</p>',
-    unsafe_allow_html=True,
-)
+def render_planung() -> None:
+    left, right = st.columns([1.25, 1])
 
-with st.form("entry_form", clear_on_submit=True):
-    fc1, fc2, fc3, fc4 = st.columns([1, 1, 1, 2])
-    with fc1:
-        f_employee = st.selectbox("Mitarbeiterin", EMPLOYEE_LIST, key="f_employee")
-    with fc2:
-        f_type = st.selectbox("Grund", list(ABSENCE_TYPES.keys()), key="f_type")
-    with fc3:
-        f_slot_label = st.selectbox(
-            "Halbtag",
-            ["Ganzer Tag", "Vormittag", "Nachmittag"],
-            key="f_slot",
+    # ─── Left card: Form ─────────────────────────────────────────
+    with left:
+        st.markdown(
+            """
+            <div class="card">
+              <h2>Abwesenheit oder Sonderwunsch</h2>
+              <div class="sub">Krank · Ferien · Termin · Home Office · Eigene Regel</div>
+            """,
+            unsafe_allow_html=True,
         )
-    with fc4:
-        f_note = st.text_input(
-            "Notiz (optional)",
+
+        f1, f2 = st.columns(2)
+        with f1:
+            st.markdown('<div class="field-label">Mitarbeiterin</div>',
+                        unsafe_allow_html=True)
+            st.selectbox(
+                "Mitarbeiterin", EMPLOYEE_LIST,
+                key="f_employee", label_visibility="collapsed",
+            )
+        with f2:
+            st.markdown('<div class="field-label">Grund</div>',
+                        unsafe_allow_html=True)
+            st.selectbox(
+                "Grund", list(ABSENCE_TYPES.keys()),
+                key="f_type", label_visibility="collapsed",
+            )
+
+        # Halbtag — segmented control
+        st.markdown('<div class="field-label" style="margin-top:8px;">Halbtag</div>',
+                    unsafe_allow_html=True)
+        seg_cols = st.columns(3)
+        seg_options = ["Ganzer Tag", "Vormittag", "Nachmittag"]
+        for i, lbl in enumerate(seg_options):
+            with seg_cols[i]:
+                is_active = st.session_state.sel_slot == lbl
+                if st.button(
+                    lbl, key=f"seg_{i}",
+                    type=("primary" if is_active else "secondary"),
+                    use_container_width=True,
+                ):
+                    st.session_state.sel_slot = lbl
+                    st.rerun()
+
+        st.markdown(
+            '<div class="field-label" style="margin-top:10px;">Notiz '
+            '<span style="font-weight:500; text-transform:none; letter-spacing:0; '
+            'color:var(--text-mute);">optional</span></div>',
+            unsafe_allow_html=True,
+        )
+        st.text_input(
+            "Notiz", key="f_note",
             placeholder="z.B. Arzttermin 14:30, oder Task-Code für Custom",
-            key="f_note",
+            label_visibility="collapsed",
         )
 
-    f_days = st.multiselect(
-        "Tage",
-        options=[0, 1, 2, 3, 4],
-        format_func=lambda d: DAY_SHORTS[d],
-        default=[],
-        key="f_days",
-    )
+        # Tage chips
+        st.markdown('<div class="field-label" style="margin-top:10px;">Tage</div>',
+                    unsafe_allow_html=True)
+        d_cols = st.columns([1, 1, 1, 1, 1, 0.6, 0.6, 2.4])
+        for i, lbl in enumerate(DAY_SHORTS):
+            with d_cols[i]:
+                is_active = i in st.session_state.sel_days
+                if st.button(
+                    lbl, key=f"day_{i}",
+                    type=("primary" if is_active else "secondary"),
+                    use_container_width=True,
+                ):
+                    if i in st.session_state.sel_days:
+                        st.session_state.sel_days.remove(i)
+                    else:
+                        st.session_state.sel_days.add(i)
+                    st.rerun()
+        with d_cols[5]:
+            if st.button("Alle", key="day_all", type="secondary",
+                         use_container_width=True):
+                st.session_state.sel_days = {0, 1, 2, 3, 4}
+                st.rerun()
+        with d_cols[6]:
+            if st.button("Keine", key="day_none", type="secondary",
+                         use_container_width=True):
+                st.session_state.sel_days = set()
+                st.rerun()
+        with d_cols[7]:
+            if st.button("＋  Hinzufügen", key="add_entry",
+                         type="primary", use_container_width=True):
+                if not st.session_state.sel_days:
+                    st.warning("Bitte mindestens einen Tag auswählen.")
+                else:
+                    days = sorted(st.session_state.sel_days)
+                    sl = st.session_state.sel_slot
+                    slots = [0, 1] if sl == "Ganzer Tag" else [0] if sl == "Vormittag" else [1]
+                    note = (st.session_state.f_note or "").strip()
+                    f_type = st.session_state.f_type
+                    task = note if (f_type == "Custom" and note) else (
+                        "HO" if f_type == "Custom" else ""
+                    )
+                    st.session_state.entries.append({
+                        "name": st.session_state.f_employee,
+                        "type": f_type,
+                        "days": days,
+                        "slots": slots,
+                        "note": note,
+                        "task": task,
+                    })
+                    st.session_state.sel_days = set()
+                    st.session_state.f_note = ""
+                    st.rerun()
 
-    bc1, bc2, bc3 = st.columns([1, 1, 5])
-    with bc1:
-        all_days = st.form_submit_button("Alle Tage")
-    with bc2:
-        no_days = st.form_submit_button("Keine")
-    with bc3:
-        submit = st.form_submit_button("＋ Hinzufügen", type="primary")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    if all_days:
-        st.session_state.f_days = [0, 1, 2, 3, 4]
-        st.rerun()
-    if no_days:
-        st.session_state.f_days = []
-        st.rerun()
+    # ─── Right card: Entries ─────────────────────────────────────
+    with right:
+        n = len(st.session_state.entries)
+        st.markdown(
+            f"""
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h2 style="margin-bottom:0;">Einträge für diese Woche</h2>
+                  <div class="sub" style="margin-bottom:0;">{n} {"Eintrag" if n == 1 else "Einträge"}</div>
+                </div>
+              </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    if submit:
-        if not f_days:
-            st.warning("Bitte mindestens einen Tag auswählen.")
-        else:
-            slots = (
-                [0, 1] if f_slot_label == "Ganzer Tag"
-                else [0] if f_slot_label == "Vormittag"
-                else [1]
-            )
-            note = (f_note or "").strip()
-            task = note if (f_type == "Custom" and note) else (
-                "HO" if f_type == "Custom" else ""
-            )
-            st.session_state.entries.append({
-                "name": f_employee,
-                "type": f_type,
-                "days": sorted(f_days),
-                "slots": slots,
-                "note": note,
-                "task": task,
-            })
-            st.rerun()
-
-# ── Eingetragene Einträge ──────────────────────────────────────────────
-
-st.markdown(
-    f'<div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">'
-    f'<h3 style="font-size:13px; margin:0; color:#e6ebf5;">Eingetragene Einträge</h3>'
-    f'<span style="font-size:12px; color:#64748b; background:#1a2338; padding:3px 10px; border-radius:999px;">'
-    f'{len(st.session_state.entries)} '
-    f'{"Eintrag" if len(st.session_state.entries) == 1 else "Einträge"}</span></div>',
-    unsafe_allow_html=True,
-)
-
-if not st.session_state.entries:
-    st.markdown(
-        '<div class="entries-empty">Keine Abwesenheiten — alles normal diese Woche.</div>',
-        unsafe_allow_html=True,
-    )
-else:
-    for idx, e in enumerate(st.session_state.entries):
-        col_e, col_x = st.columns([20, 1])
-        with col_e:
-            type_key = type_to_key(e["type"])
-            days_str = ", ".join(DAY_SHORTS[d] for d in e["days"])
-            slot_str = (
-                "ganzer Tag" if len(e["slots"]) == 2
-                else "Vormittag" if e["slots"][0] == 0
-                else "Nachmittag"
-            )
-            note_html = (
-                f'<span class="entry-note">· „{html_escape(e["note"])}"</span>'
-                if e["note"] else ""
-            )
+        if n == 0:
             st.markdown(
-                f"""
-                <div class="entry-item">
-                  <span class="entry-dot {type_key}"></span>
-                  <span class="entry-name">{html_escape(e['name'])}</span>
-                  <span class="entry-meta">· {html_escape(e['type'])} · {days_str} ({slot_str})</span>
-                  {note_html}
+                """
+                <div class="empty-state">
+                  <div class="icon">📅</div>
+                  <div class="ttl">Keine Abwesenheiten erfasst.</div>
+                  <div>Diese Woche läuft wie geplant.</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-        with col_x:
-            if st.button("✕", key=f"rm_{idx}", help="Entfernen"):
-                st.session_state.entries.pop(idx)
-                st.rerun()
+        else:
+            for idx, e in enumerate(st.session_state.entries):
+                type_key = type_to_key(e["type"])
+                days_str = ", ".join(DAY_SHORTS[d] for d in e["days"])
+                slot_str = (
+                    "ganzer Tag" if len(e["slots"]) == 2
+                    else "Vormittag" if e["slots"][0] == 0
+                    else "Nachmittag"
+                )
+                note_html = (
+                    f'<span class="entry-note">· „{html_escape(e["note"])}"</span>'
+                    if e["note"] else ""
+                )
+                erow_l, erow_r = st.columns([12, 1])
+                with erow_l:
+                    st.markdown(
+                        f"""
+                        <div class="entry-row">
+                          <span class="entry-dot {type_key}"></span>
+                          <span class="entry-name">{html_escape(e['name'])}</span>
+                          <span class="entry-meta">· {html_escape(e['type'])} · {days_str} ({slot_str})</span>
+                          {note_html}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                with erow_r:
+                    if st.button("✕", key=f"rm_{idx}", help="Entfernen",
+                                 use_container_width=True):
+                        st.session_state.entries.pop(idx)
+                        st.rerun()
 
-st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ── ACTION BAR ─────────────────────────────────────────────────────────
-
-ac1, ac2 = st.columns([1, 3])
-with ac1:
-    generate = st.button(
-        "▶  Arbeitsplan generieren",
-        type="primary",
-        use_container_width=True,
-    )
-status_slot = ac2.empty()
-
-if generate:
-    with st.spinner("Plan wird generiert · Regelprüfung · Zuteilung · Excel-Export …"):
-        try:
-            cur_info = get_week_info(st.session_state.week_offset)
-            kw = cur_info["kw"]
-            monday = cur_info["monday"]
-
-            employees = create_employees(kw)
-            overrides: dict = {}
-            extra_notes: dict = {}
-            absences: list = []
-
-            for entry in st.session_state.entries:
-                if entry["name"] not in employees:
-                    continue
-                task_code = ABSENCE_TYPES.get(entry["type"], "CUSTOM")
-                note = (entry.get("note") or "").strip()
-
-                if task_code == "TERMIN":
-                    label = f"*{note}" if note else "*Termin"
-                elif task_code == "CUSTOM":
-                    label = (entry.get("task") or "").strip() or "HO"
-                else:
-                    label = task_code
-
-                for day in entry["days"]:
-                    for slot in entry["slots"]:
-                        if employees[entry["name"]].is_available(day, slot):
-                            overrides[(entry["name"], day, slot)] = label
-                            if note and task_code in ("KRANK", "FERIEN", "HO"):
-                                extra_notes[(entry["name"], day, slot)] = note
-                            if task_code in ("KRANK", "FERIEN") or label.startswith("*"):
-                                absences.append((entry["name"], day, slot))
-
-            warnings = check_rule_impact(absences, employees) if absences else []
-
-            random.seed(kw + st.session_state.week_offset)
-            sched = build_schedule(kw, monday, overrides, state_file=str(STATE_FILE))
-            for key, n in extra_notes.items():
-                sched.notes[key] = n
-
-            issues = validate_schedule(sched)
-
-            filename = f"Arbeitsplan_KW{kw}_{monday.strftime('%Y%m%d')}.xlsx"
-            output_path = OUTPUT_DIR / filename
-            write_excel(sched, str(output_path))
-
-            coverage = []
-            for day in range(5):
-                for slot in range(2):
-                    target_tel = 4 if (day == 0 and slot == 0) else 3
-                    coverage.append({
-                        "day": DAYS[day],
-                        "slot": SLOTS[slot],
-                        "tel": sched.tel_count[day][slot],
-                        "tel_target": target_tel,
-                        "abkl": sched.abkl_count[day][slot],
-                        "abkl_target": 2,
-                        "tel_ok": sched.tel_count[day][slot] >= target_tel,
-                        "abkl_ok": sched.abkl_count[day][slot] >= 2,
-                    })
-
-            tagesverantwortung = [
-                {"day": DAYS[d], "person": sched.tagesverantwortung.get(d, "?")}
-                for d in range(5)
-            ]
-            phc_liste = [
-                {"day": DAYS[d], "person": sched.phc_liste.get(d, "?")}
-                for d in range(5)
-            ]
-
-            rows = []
-            for name in EMPLOYEE_LIST:
-                if name not in sched.employees:
-                    continue
-                emp = sched.employees[name]
-                cells = []
-                for day in range(5):
-                    for slot in range(2):
-                        task = sched.get_task(name, day, slot)
-                        is_phc = slot == 1 and sched.phc_liste.get(day) == name
-                        cells.append({"task": task, "is_phc": is_phc})
-                rows.append({
-                    "name": emp.name,
-                    "pct": emp.pct,
-                    "cells": cells,
-                })
-
-            with open(output_path, "rb") as fh:
-                excel_bytes = fh.read()
-
-            st.session_state.result = {
-                "filename": filename,
-                "excel_bytes": excel_bytes,
-                "kw": kw,
-                "warnings": warnings,
-                "issues": issues,
-                "coverage": coverage,
-                "tagesverantwortung": tagesverantwortung,
-                "phc_liste": phc_liste,
-                "wochenaufgaben": {
-                    "direkt": sched.wochenaufgabe_direkt,
-                    "onb": sched.wochenaufgabe_onb,
-                    "btm": sched.wochenaufgabe_btm,
-                },
-                "rows": rows,
-            }
-            status_slot.success(f"✓ {filename}")
-        except Exception as exc:  # pragma: no cover
-            status_slot.error(f"Fehler beim Generieren: {exc}")
-            st.exception(exc)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ── SECTION: ERGEBNIS ──────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════
+#  STEP 2 — ERGEBNIS
+# ════════════════════════════════════════════════════════════════════════
 
-res = st.session_state.result
-if res:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    head_l, head_r = st.columns([3, 1])
-    head_l.markdown('<h2 class="card-title">Ergebnis</h2>', unsafe_allow_html=True)
-    with head_r:
-        st.download_button(
-            "⬇  Excel herunterladen",
-            data=res["excel_bytes"],
-            file_name=res["filename"],
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
+def render_ergebnis() -> None:
+    res = st.session_state.result
+    if not res:
+        st.info("Noch kein Plan generiert. Klicke auf **Plan generieren**.")
+        return
+
+    # Banner
+    if res["issues"]:
+        items = "".join(f"<li>{html_escape(i)}</li>" for i in res["issues"])
+        st.markdown(
+            f'<div class="banner banner-error"><div class="check">!</div>'
+            f'<div><h4>Konflikte / Regeln nicht vollständig einhaltbar</h4>'
+            f'<ul>{items}</ul></div></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="banner banner-ok"><div class="check">✓</div>'
+            '<div><h4>Alle harten Regeln eingehalten.</h4></div></div>',
+            unsafe_allow_html=True,
         )
 
     if res["warnings"]:
         items = "".join(f"<li>{html_escape(w)}</li>" for w in res["warnings"])
         st.markdown(
-            f'<div class="banner banner-warn"><h4>Warnungen vor dem Generieren '
-            f'(Regel-Impact)</h4><ul>{items}</ul></div>',
+            f'<div class="banner banner-warn"><div class="check">!</div>'
+            f'<div><h4>Warnungen vor dem Generieren (Regel-Impact)</h4>'
+            f'<ul>{items}</ul></div></div>',
             unsafe_allow_html=True,
         )
 
-    if res["issues"]:
-        items = "".join(f"<li>{html_escape(i)}</li>" for i in res["issues"])
-        st.markdown(
-            f'<div class="banner banner-error"><h4>Konflikte / Regeln nicht '
-            f'vollständig einhaltbar</h4><ul>{items}</ul></div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<div class="banner banner-ok">Alle harten Regeln eingehalten.</div>',
-            unsafe_allow_html=True,
-        )
+    # Wochenplan card
+    st.markdown(
+        """
+        <div class="card">
+          <div class="card-head">
+            <h2 style="margin-bottom:0;">Wochenplan</h2>
+          </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # ── Coverage ─────────────────────────────────────────────────────
-    st.markdown('<div class="section-title">Besetzung</div>', unsafe_allow_html=True)
-    cov_cols_per_row = 5
-    cov = res["coverage"]
-    for i in range(0, len(cov), cov_cols_per_row):
-        row = cov[i:i + cov_cols_per_row]
-        cols = st.columns(len(row))
-        for col, c in zip(cols, row):
-            tel_cls = "cov-ok" if c["tel_ok"] else "cov-bad"
-            abkl_cls = "cov-ok" if c["abkl_ok"] else "cov-bad"
-            col.markdown(
-                f"""
-                <div class="cov-card">
-                  <div class="cov-head">
-                    <span class="cov-day">{c['day']}</span>
-                    <span>{c['slot']}</span>
-                  </div>
-                  <div class="cov-row"><span>TEL</span>
-                    <span class="cov-badge {tel_cls}">{c['tel']}/{c['tel_target']}</span>
-                  </div>
-                  <div class="cov-row"><span>ABKL</span>
-                    <span class="cov-badge {abkl_cls}">{c['abkl']}/{c['abkl_target']}</span>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    parts = ['<div class="plan-wrap"><table class="plan">']
 
-    # ── Tagesverantwortung & PHC ─────────────────────────────────────
-    tv_col, phc_col = st.columns(2)
-    with tv_col:
-        st.markdown('<div class="section-title">Tagesverantwortung</div>', unsafe_allow_html=True)
-        for item in res["tagesverantwortung"]:
-            is_open = "OFFEN" in item["person"]
-            cls = "pill-val open" if is_open else "pill-val"
-            st.markdown(
-                f'<div class="pill"><span class="pill-day">{item["day"]}</span>'
-                f'<span class="{cls}">{html_escape(item["person"])}</span></div>',
-                unsafe_allow_html=True,
-            )
-    with phc_col:
-        st.markdown('<div class="section-title">PHC-Liste (18 Uhr)</div>', unsafe_allow_html=True)
-        for item in res["phc_liste"]:
-            is_open = "OFFEN" in item["person"]
-            cls = "pill-val open" if is_open else "pill-val"
-            st.markdown(
-                f'<div class="pill"><span class="pill-day">{item["day"]}</span>'
-                f'<span class="{cls}">{html_escape(item["person"])}</span></div>',
-                unsafe_allow_html=True,
-            )
-
-    # ── Wochenaufgaben ───────────────────────────────────────────────
-    st.markdown('<div class="section-title">Wochenaufgaben</div>', unsafe_allow_html=True)
-    wa = res["wochenaufgaben"]
-    wa_entries = [
-        ("Direktbestellung", wa["direkt"]),
-        ("ONB", wa["onb"]),
-        ("BTM", wa["btm"]),
-    ]
-    cols = st.columns(len(wa_entries))
-    for col, (lbl, val) in zip(cols, wa_entries):
-        col.markdown(
-            f'<div class="wa-card"><div class="wa-label">{lbl}</div>'
-            f'<div class="wa-val">{html_escape(val or "–")}</div></div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Schedule-Tabelle ─────────────────────────────────────────────
-    st.markdown('<div class="section-title">Vorschau</div>', unsafe_allow_html=True)
-    parts = ['<div class="schedule-wrap"><table class="schedule">']
+    # ── HEAD ROW 1: Team header + day-heads with TV pills ───────
     parts.append("<thead><tr>")
-    parts.append('<th rowspan="2" style="text-align:left; padding-left:14px;">Name</th>')
-    parts.append('<th rowspan="2">%</th>')
-    for d in DAYS:
-        parts.append(f'<th class="day-col" colspan="2">{d}</th>')
-    parts.append("</tr><tr>")
-    for _ in DAYS:
-        parts.append("<th>VM</th><th>NM</th>")
-    parts.append("</tr></thead><tbody>")
+    parts.append(
+        '<th class="team-head" colspan="2" rowspan="2">'
+        '<div class="ttl">TEAM</div>'
+        '<div class="legend">TV · Tagesverantwortung</div>'
+        '</th>'
+    )
+    for d in range(5):
+        tv = res["tagesverantwortung"][d]
+        is_open = "OFFEN" in str(tv)
+        tv_short = next(
+            (r["short"] for r in res["rows"] if r["short"] == tv or r["full_name"] == tv),
+            tv,
+        )
+        # use short name in the TV pill (fits the small space)
+        cls = " open" if is_open else ""
+        parts.append(
+            f'<th class="day-head" colspan="2">'
+            f'<span class="day-name">{DAYS[d].upper()}</span>'
+            f'<span class="tv-pill{cls}"><span class="tv-tag">TV</span>'
+            f'<span class="tv-name">{html_escape(tv_short)}</span></span>'
+            f'</th>'
+        )
+    parts.append("</tr>")
 
+    # ── HEAD ROW 2: VM/NM ──────────────────────────────────────
+    parts.append("<tr>")
+    for _ in range(5):
+        parts.append('<th class="slot-head">VM</th><th class="slot-head">NM</th>')
+    parts.append("</tr></thead>")
+
+    # ── BODY ──────────────────────────────────────────────────
+    parts.append("<tbody>")
     for r in res["rows"]:
         parts.append("<tr>")
-        parts.append(f'<td class="name-col">{html_escape(r["name"])}</td>')
-        parts.append(f'<td class="pct-col">{r["pct"]}%</td>')
+        parts.append(f'<td class="name-cell">{html_escape(r["full_name"])}</td>')
+        parts.append(f'<td class="pct-cell">{r["pct"]}%</td>')
         for c in r["cells"]:
             task = c["task"] or ""
+            if not task:
+                parts.append('<td class="task-cell"></td>')
+                continue
             if c["is_phc"]:
-                parts.append(f'<td class="cell-phc">{html_escape(task)}</td>')
-            else:
-                bg, fg = style_for_task(task)
                 parts.append(
-                    f'<td style="background:{bg}; color:{fg};">{html_escape(task)}</td>'
+                    f'<td class="task-cell"><span class="pill pill-phc">'
+                    f'{html_escape(task)}</span></td>'
+                )
+            elif task.startswith("*"):
+                parts.append(
+                    f'<td class="task-cell"><span class="pill pill-termin">'
+                    f'{html_escape(task[1:])}</span></td>'
+                )
+            else:
+                bg, fg = pill_for_task(task)
+                parts.append(
+                    f'<td class="task-cell"><span class="pill" '
+                    f'style="background:{bg}; color:{fg};">'
+                    f'{html_escape(task)}</span></td>'
                 )
         parts.append("</tr>")
     parts.append("</tbody></table></div>")
-    parts.append(
-        '<p class="tiny-hint">Farbige Markierungen entsprechen den Task-Typen '
-        'im Excel. Blaue Zellen = PHC/18-Uhr-Liste.</p>'
-    )
-    st.markdown("".join(parts), unsafe_allow_html=True)
 
+    # ── Wochenaufgaben strip ──────────────────────────────────
+    wa = res["wochenaufgaben"]
+    parts.append(
+        f"""
+        <div class="wa-strip">
+          <div class="wa-card">
+            <div class="wa-icon">📦</div>
+            <div class="wa-meta">
+              <div class="lbl">Direkt</div>
+              <div class="val">{html_escape(wa['direkt'] or '–')}</div>
+            </div>
+          </div>
+          <div class="wa-card">
+            <div class="wa-icon">🆕</div>
+            <div class="wa-meta">
+              <div class="lbl">ONB</div>
+              <div class="val">{html_escape(wa['onb'] or '–')}</div>
+            </div>
+          </div>
+          <div class="wa-card">
+            <div class="wa-icon">💊</div>
+            <div class="wa-meta">
+              <div class="lbl">BTM</div>
+              <div class="val">{html_escape(wa['btm'] or '–')}</div>
+            </div>
+          </div>
+        </div>
+        """
+    )
+
+    st.markdown("".join(parts), unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # Coverage details (collapsed)
+    with st.expander("Besetzung (Detailansicht) · TEL und ABKL pro Halbtag"):
+        cov_per_row = 5
+        for i in range(0, len(res["coverage"]), cov_per_row):
+            row = res["coverage"][i:i + cov_per_row]
+            cols = st.columns(len(row))
+            for col, c in zip(cols, row):
+                tel_color = "#16a34a" if c["tel_ok"] else "#dc2626"
+                abkl_color = "#16a34a" if c["abkl_ok"] else "#dc2626"
+                col.markdown(
+                    f"""
+                    <div style="background:#f8fafc; border:1px solid #e3e8f0;
+                                border-radius:8px; padding:10px 12px; font-size:12px;">
+                      <div style="display:flex; justify-content:space-between; color:#475569;">
+                        <strong style="color:#0b1020;">{c['day']}</strong>
+                        <span>{c['slot']}</span>
+                      </div>
+                      <div style="display:flex; justify-content:space-between; margin-top:4px;">
+                        <span>TEL</span>
+                        <span style="color:{tel_color}; font-weight:700;">{c['tel']}/{c['tel_target']}</span>
+                      </div>
+                      <div style="display:flex; justify-content:space-between;">
+                        <span>ABKL</span>
+                        <span style="color:{abkl_color}; font-weight:700;">{c['abkl']}/{c['abkl_target']}</span>
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-# ── FOOTER ─────────────────────────────────────────────────────────────
+    # PHC-Liste
+    with st.expander("PHC-Liste (18 Uhr)"):
+        for d, p in enumerate(res["phc_liste"]):
+            is_open = "OFFEN" in str(p)
+            color = "#d97706" if is_open else "#0b1020"
+            st.markdown(
+                f'<div style="display:flex; justify-content:space-between; '
+                f'padding:6px 12px; border-bottom:1px solid #e3e8f0;">'
+                f'<span style="color:#475569;">{DAYS[d]}</span>'
+                f'<span style="color:{color}; font-weight:600;">{html_escape(p)}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-st.markdown(
-    '<div style="display:flex; justify-content:space-between; padding:16px 6px 0; '
-    'font-size:12px; color:#64748b; border-top:1px solid #273149; margin-top:18px;">'
-    '<span>KSC Arbeitsplan v6.0 · Streamlit-Variante</span>'
-    '<span style="color:#22c55e;">● online</span></div>',
-    unsafe_allow_html=True,
-)
+
+# ── Render aktive Step ─────────────────────────────────────────────────
+
+if st.session_state.step == 1 or st.session_state.result is None:
+    render_planung()
+else:
+    render_ergebnis()
