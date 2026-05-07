@@ -21,6 +21,7 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 # ── Kern-Logik importieren ────────────────────────────────────────────
@@ -164,6 +165,24 @@ TASK_PILL = {
     "FERIEN":   ("#F2F2F2", "#595959"),
     "scanning": ("#E2EFDA", "#386641"),
 }
+
+# Drop-down options for the editable Wochenplan. Order: leer, Pflichtrollen,
+# Erfassungs-Kombis, PO-Kombis, Schalter / Labor, HO, Spezialrollen,
+# Abwesenheiten. The empty string clears the cell.
+TASK_OPTIONS = [
+    "",
+    "TEL", "ABKL",
+    "ERF7", "ERF7/Q", "ERF7/HUB",
+    "ERF8", "ERF8/Q", "ERF8/HUB",
+    "ERF9", "ERF9/Q", "ERF9/TEL",
+    "ERF4/SCH", "ERF5",
+    "PO", "PO/Q", "PO/SCAN", "PO/ABKL", "PO/TEL",
+    "HO", "HO/Q",
+    "KGS", "KTG",
+    "KSC Spez.", "TAGES PA",
+    "RX Abo", "VBZ/Q",
+    "KRANK", "FERIEN",
+]
 
 OUTPUT_DIR = Path(os.environ.get("KSC_OUTPUT_DIR", BASE_DIR / "output"))
 STATE_FILE = Path(
@@ -955,6 +974,10 @@ def run_generation() -> None:
         },
         "rows": rows,
     }
+    # Keep the live Schedule + output path so the manual editor can mutate
+    # cells in place and rewrite the Excel without regenerating.
+    st.session_state.sched = sched
+    st.session_state.output_path = str(output_path)
     st.session_state.step = 2
 
 
@@ -1398,6 +1421,121 @@ def render_planung() -> None:
         st.markdown("</div>", unsafe_allow_html=True)
 
 
+def render_plan_editor(res: dict) -> None:
+    """Editable Wochenplan: per-cell Dropdowns + freier Text via Custom-Eingabe.
+
+    Mutates st.session_state.sched in place when the user applies edits and
+    re-writes the Excel file so the download stays in sync. The visible
+    HTML table above is rebuilt from res['rows'] on the next rerun.
+    """
+    sched = st.session_state.get("sched")
+    if sched is None:
+        return
+
+    slot_cols = [
+        f"{DAY_SHORTS[d]} {'VM' if s == 0 else 'NM'}"
+        for d in range(5) for s in range(2)
+    ]
+
+    with st.expander("✏️  Plan bearbeiten · Felder per Dropdown ändern", expanded=False):
+        st.caption(
+            "Pro Halbtag eine Tätigkeit auswählen. Leer = Slot frei. "
+            "Änderungen werden nach „Übernehmen“ in den Plan und in die "
+            "Excel-Datei geschrieben."
+        )
+
+        df_rows = []
+        for r in res["rows"]:
+            row = {"Name": r["full_name"], "%": f"{r['pct']}%"}
+            for i, col in enumerate(slot_cols):
+                task = r["cells"][i]["task"] or ""
+                # Stripped Termin marker („*Arzt“) wird zur reinen Notiz
+                if task.startswith("*"):
+                    task = task[1:]
+                row[col] = task
+            df_rows.append(row)
+        df = pd.DataFrame(df_rows, columns=["Name", "%"] + slot_cols)
+
+        col_config: dict = {
+            "Name": st.column_config.TextColumn("Name", disabled=True, width="medium"),
+            "%": st.column_config.TextColumn("%", disabled=True, width="small"),
+        }
+        for col in slot_cols:
+            col_config[col] = st.column_config.SelectboxColumn(
+                col,
+                options=TASK_OPTIONS,
+                required=False,
+                width="small",
+                help="Tätigkeit für diesen Halbtag",
+            )
+
+        edited = st.data_editor(
+            df,
+            column_config=col_config,
+            hide_index=True,
+            num_rows="fixed",
+            use_container_width=True,
+            key=f"plan_editor_{res['kw']}",
+        )
+
+        c1, c2 = st.columns([1, 4])
+        with c1:
+            apply = st.button(
+                "✓  Änderungen übernehmen",
+                key=f"apply_edits_{res['kw']}",
+                type="primary",
+                use_container_width=True,
+            )
+        with c2:
+            st.caption(
+                "Nach „Übernehmen“: Tabelle oben + Excel-Download werden "
+                "aktualisiert. Wochenwechsel via ‹ / › regeneriert komplett neu."
+            )
+
+        if not apply:
+            return
+
+        # Apply edits: mutate sched.schedule and res['rows'] in lock-step.
+        changes = 0
+        for ridx, r in enumerate(res["rows"]):
+            short = r["short"]
+            if short not in sched.employees:
+                continue
+            for cidx, col in enumerate(slot_cols):
+                new_val = edited.at[ridx, col]
+                if new_val is None or (isinstance(new_val, float) and pd.isna(new_val)):
+                    new_val = ""
+                new_val = str(new_val)
+                old_val = r["cells"][cidx]["task"] or ""
+                # Original sternstart-Notiz wieder ausblenden
+                if old_val.startswith("*"):
+                    old_val = old_val[1:]
+                if new_val == old_val:
+                    continue
+                d, s = divmod(cidx, 2)
+                sched.schedule[short][(d, s)] = new_val
+                r["cells"][cidx]["task"] = new_val
+                changes += 1
+
+        if changes == 0:
+            st.info("Keine Änderungen erkannt.")
+            return
+
+        # Rewrite Excel from the mutated Schedule
+        output_path = st.session_state.get("output_path")
+        if output_path:
+            try:
+                write_excel(sched, output_path)
+                with open(output_path, "rb") as fh:
+                    st.session_state.result["excel_bytes"] = fh.read()
+            except Exception as exc:
+                st.error(f"Excel-Update fehlgeschlagen: {exc}")
+                return
+
+        st.success(f"{changes} Änderung(en) übernommen.")
+        st.rerun()
+
+
 # ════════════════════════════════════════════════════════════════════════
 #  STEP 2 — ERGEBNIS
 # ════════════════════════════════════════════════════════════════════════
@@ -1541,6 +1679,9 @@ def render_ergebnis() -> None:
 
     st.markdown("".join(parts), unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Editable plan ────────────────────────────────────────────
+    render_plan_editor(res)
 
     # Coverage details (collapsed)
     with st.expander("Besetzung (Detailansicht) · TEL und ABKL pro Halbtag"):
