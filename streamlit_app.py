@@ -44,6 +44,37 @@ from arbeitskalender import (  # noqa: E402
 # ── Monkey-patch create_employees so user-edited team is honoured ─────
 _ORIG_CREATE_EMPLOYEES = _ak.create_employees
 
+_SLOT_ORDER = [(d, s) for d in range(5) for s in range(2)]
+
+
+def _adjust_availability_to_pct(emp: Employee, pct: int) -> None:
+    """Match the count of available (day, slot) pairs to the given pensum.
+
+    10 weekly slots total (5 days × VM/NM); each 10 % pensum equals one slot.
+    Slots are added in calendar order (Mo VM → Fr NM) and removed in reverse,
+    so increasing Brigitte from 70 % to 80 % unblocks Mi NM first instead of
+    leaving her at her hardcoded 7-slot availability.
+    """
+    target = max(0, min(10, round(pct / 10)))
+    for slot in _SLOT_ORDER:
+        emp.available.setdefault(slot, False)
+    current = sum(1 for slot in _SLOT_ORDER if emp.available[slot])
+
+    if current < target:
+        for slot in _SLOT_ORDER:
+            if current >= target:
+                break
+            if not emp.available[slot]:
+                emp.available[slot] = True
+                current += 1
+    elif current > target:
+        for slot in reversed(_SLOT_ORDER):
+            if current <= target:
+                break
+            if emp.available[slot]:
+                emp.available[slot] = False
+                current -= 1
+
 
 def _patched_create_employees(week_number: int):
     base = _ORIG_CREATE_EMPLOYEES(week_number)
@@ -58,7 +89,9 @@ def _patched_create_employees(week_number: int):
         pct = int(entry["pct"])
         if entry.get("is_default") and short in base:
             emp = base[short]
-            emp.pct = pct
+            if emp.pct != pct:
+                _adjust_availability_to_pct(emp, pct)
+                emp.pct = pct
             out[short] = emp
         elif not entry.get("is_default"):
             new_emp = Employee(
@@ -72,6 +105,7 @@ def _patched_create_employees(week_number: int):
             for d in range(5):
                 for s in range(2):
                     new_emp.available[(d, s)] = True
+            _adjust_availability_to_pct(new_emp, pct)
             out[short] = new_emp
     return out
 
