@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>KSC Arbeitsplan</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">KSC</div>
+      <div class="brand-text">
+        <div class="brand-title">Arbeitsplan</div>
+        <div class="brand-sub">Team-Scheduling</div>
+      </div>
+    </div>
+
+    <nav class="side-nav">
+      <a href="#section-week" class="nav-item active">
+        <span class="nav-dot"></span> Woche
+      </a>
+      <a href="#section-input" class="nav-item">
+        <span class="nav-dot"></span> Abwesenheiten
+      </a>
+      <a href="#section-result" class="nav-item">
+        <span class="nav-dot"></span> Ergebnis
+      </a>
+    </nav>
+
+    <div class="side-footer">
+      <div class="side-footer-row">
+        <span class="label">Version</span>
+        <span class="value">6.0</span>
+      </div>
+      <div class="side-footer-row">
+        <span class="label">Team</span>
+        <span class="value">18 Personen</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <main class="main">
+
+    <!-- ─── TOPBAR ─── -->
+    <header class="topbar">
+      <div>
+        <h1 class="page-title">Wochenplan generieren</h1>
+        <p class="page-sub">Arbeitsplan für das KSC-Team — Montag bis Freitag</p>
+      </div>
+      <div class="week-switch">
+        <button id="btn-week-prev" class="icon-btn" title="Woche zurück">‹</button>
+        <div class="week-switch-label">
+          <span class="kw-big" id="kw-label">KW {{ week_info.kw }}</span>
+          <span class="kw-range" id="kw-range">{{ week_info.monday_str }} – {{ week_info.friday_str }}</span>
+        </div>
+        <button id="btn-week-next" class="icon-btn" title="Woche vor">›</button>
+      </div>
+    </header>
+
+    <!-- ─── SECTION: WOCHEN-INFO ─── -->
+    <section id="section-week" class="card">
+      <div class="card-head">
+        <h2 class="card-title">Wochen-Kontext</h2>
+        <span class="badge" id="week-type-badge">
+          {{ "gerade KW" if week_info.is_even else "ungerade KW" }}
+        </span>
+      </div>
+
+      <div class="week-grid">
+        <div class="stat">
+          <div class="stat-label">Kalenderwoche</div>
+          <div class="stat-value" id="stat-kw">{{ week_info.kw }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Montag</div>
+          <div class="stat-value" id="stat-mo">{{ week_info.monday_str }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Freitag</div>
+          <div class="stat-value" id="stat-fr">{{ week_info.friday_str }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Team</div>
+          <div class="stat-value">18</div>
+        </div>
+      </div>
+
+      <div class="info-strip" id="info-strip">
+        <div class="info-strip-icon">i</div>
+        <div class="info-strip-text" id="info-strip-text">
+          {% for n in week_info.two_week_notes %}{{ n }}{% if not loop.last %} · {% endif %}{% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── SECTION: EINGABE ─── -->
+    <section id="section-input" class="card">
+      <div class="card-head">
+        <h2 class="card-title">Abwesenheit oder Sonderwunsch hinzufügen</h2>
+        <span class="card-sub">Krankmeldung · Ferien · Termin · HO · eigene Regel</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Mitarbeiterin</label>
+          <select id="f-employee">
+            {% for e in employees %}
+            <option value="{{ e }}">{{ e }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Grund</label>
+          <select id="f-type">
+            {% for t in absence_types %}
+            <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Halbtag</label>
+          <select id="f-slot">
+            <option value="both">Ganzer Tag</option>
+            <option value="0">Vormittag</option>
+            <option value="1">Nachmittag</option>
+          </select>
+        </div>
+
+        <div class="field field-wide">
+          <label>Notiz <span class="field-hint">(optional)</span></label>
+          <input type="text" id="f-note" placeholder="z.B. Arzttermin 14:30, oder Task-Code für Custom">
+        </div>
+      </div>
+
+      <div class="days-row">
+        <label class="days-label">Tage:</label>
+        <div class="days-chips" id="days-chips">
+          <button class="chip" data-day="0">Mo</button>
+          <button class="chip" data-day="1">Di</button>
+          <button class="chip" data-day="2">Mi</button>
+          <button class="chip" data-day="3">Do</button>
+          <button class="chip" data-day="4">Fr</button>
+        </div>
+        <div class="days-quick">
+          <button class="ghost-btn" id="btn-all-days">Alle</button>
+          <button class="ghost-btn" id="btn-no-days">Keine</button>
+        </div>
+        <div class="form-actions">
+          <button class="primary-btn" id="btn-add">
+            <span>+</span> Hinzufügen
+          </button>
+        </div>
+      </div>
+
+      <div class="entries-head">
+        <h3>Eingetragene Einträge</h3>
+        <span class="entries-count" id="entries-count">0 Einträge</span>
+      </div>
+      <div id="entries-list" class="entries-list"></div>
+      <div id="entries-empty" class="entries-empty">
+        Keine Abwesenheiten — alles normal diese Woche.
+      </div>
+    </section>
+
+    <!-- ─── SECTION: AKTION ─── -->
+    <div class="action-bar">
+      <button id="btn-generate" class="cta-btn">
+        <span class="cta-icon">▶</span>
+        <span>Arbeitsplan generieren</span>
+      </button>
+      <div class="action-status" id="action-status"></div>
+    </div>
+
+    <!-- ─── SECTION: ERGEBNIS ─── -->
+    <section id="section-result" class="card result-card hidden">
+      <div class="card-head">
+        <h2 class="card-title">Ergebnis</h2>
+        <a id="download-link" href="#" class="download-btn hidden">
+          <span>⬇</span> Excel herunterladen
+        </a>
+      </div>
+
+      <!-- Warnungen -->
+      <div id="result-warnings" class="banner banner-warn hidden"></div>
+
+      <!-- Issues -->
+      <div id="result-issues" class="banner banner-error hidden"></div>
+
+      <!-- Success -->
+      <div id="result-success" class="banner banner-ok hidden">
+        Alle harten Regeln eingehalten.
+      </div>
+
+      <!-- Coverage -->
+      <div class="result-section">
+        <h3 class="result-section-title">Besetzung</h3>
+        <div class="coverage-grid" id="coverage-grid"></div>
+      </div>
+
+      <!-- Key Info -->
+      <div class="result-section two-col">
+        <div>
+          <h3 class="result-section-title">Tagesverantwortung</h3>
+          <div class="pill-list" id="tv-list"></div>
+        </div>
+        <div>
+          <h3 class="result-section-title">PHC-Liste (18 Uhr)</h3>
+          <div class="pill-list" id="phc-list"></div>
+        </div>
+      </div>
+
+      <div class="result-section">
+        <h3 class="result-section-title">Wochenaufgaben</h3>
+        <div class="wa-grid" id="wa-grid"></div>
+      </div>
+
+      <!-- Vorschau-Tabelle -->
+      <div class="result-section">
+        <h3 class="result-section-title">Vorschau</h3>
+        <div class="schedule-scroll">
+          <table class="schedule-table" id="schedule-table"></table>
+        </div>
+        <p class="tiny-hint">Farbige Markierungen entsprechen den Task-Typen im Excel. Blaue Zellen = PHC/18-Uhr-Liste.</p>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>KSC Arbeitsplan v6.0 · läuft containerisiert</span>
+      <span id="health-indicator">● online</span>
+    </footer>
+  </main>
+</div>
+
+<!-- Loading Overlay -->
+<div id="overlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="spinner"></div>
+    <div class="overlay-text">Plan wird generiert …</div>
+    <div class="overlay-sub">Regelprüfung · Zuteilung · Excel-Export</div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

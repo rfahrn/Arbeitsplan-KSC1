@@ -1,9 +1,11 @@
 {
-  "last_generated_week": 16,
-  "linda_ho_week": true,
-  "labor_jesika": false,
-  "schalter_group": 1,
+  "last_generated_week": 17,
+  "linda_ho_week": false,
+  "labor_jesika": true,
+  "schalter_group": 0,
   "friday_tagesv_corinne": false,
-  "tl_monday_idx": 1,
-  "direkt_idx": 1
+  "tl_monday_idx": 2,
+  "direkt_idx": 1,
+  "friday_phc_corinne": false,
+  "tv_week_idx": 1
 }

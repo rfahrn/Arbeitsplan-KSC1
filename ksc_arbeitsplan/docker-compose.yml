@@ -1,0 +1,25 @@
+services:
+  ksc-arbeitsplan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ksc-arbeitsplan:latest
+    container_name: ksc-arbeitsplan
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistiert generierte Excel-Dateien + State auf dem Host.
+      # Unter Windows einfach einen Pfad wie C:\KSC\data verwenden
+      # oder den relativen Pfad ./data stehen lassen.
+      - ./data:/data
+    environment:
+      - TZ=Europe/Zurich
+      - KSC_HOST=0.0.0.0
+      - KSC_PORT=8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-Arbeitskalender-Generator für KSC-Team
-Erstellt wöchentliche Arbeitspläne als Excel-Datei mit allen Regeln.
+Arbeitskalender-Generator für KSC-Team (Version 5.0 - FINAL)
+=============================================================
+- Tagesverantwortung: GLEICHE Person für VM + NM am selben Tag
+- Nur die 18 Kernmitarbeiter (ohne Stephi, Tamara, Manuela, Maria F., SPP)
+- Legende exakt wie Referenzbild mit separater TV-Legende
+- Wochenaufgaben: Je 1 Person für Direkt, ONB, BTM
 """
 
 import json
 import random
 import os
 from datetime import datetime, timedelta
-from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Optional
-
+from typing import Dict, List, Optional, Tuple
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -22,44 +24,67 @@ from openpyxl.utils import get_column_letter
 
 DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
 SLOTS = ["Vormittag", "Nachmittag"]
-DAY_SLOTS = [(d, s) for d in DAYS for s in SLOTS]
 
-# Farben für Aufgaben (RGB hex ohne #)
-COLORS = {
-    "TEL":      "92D050",  # Grün
-    "ABKL":     "FFC000",  # Orange
-    "ERF7":     "00B0F0",  # Blau
-    "ERF8":     "FF6600",  # Dunkelorange
-    "ERF9":     "FF0000",  # Rot
-    "ERF7/HUB": "00B0F0",  # Blau (wie ERF7)
-    "HUB":      "00B0F0",
-    "PO":       "D9E1F2",  # Hellblau
-    "SCAN":     "E2EFDA",  # Hellgrün
-    "PO/SCAN":  "E2EFDA",
-    "PO/ABKL":  "FFC000",
-    "HO":       "BDD7EE",  # Hellblau
-    "HO/Q":     "BDD7EE",
-    "KSC Spez.":"FFFF00",  # Gelb
-    "KGS":      "FFFF00",
-    "TAGESPA":  "00FFFF",  # Cyan
-    "TAGESV":   "00FFFF",
-    "ERF4/SCH": "C6EFCE",  # Schalter - hellgrün
-    "Fx Abo":   "D9D9D9",  # Grau
-    "RX Abo":   "D9D9D9",
-    "Labor":    "F4B084",  # Hellorange
-    "Direkt":   "B4C6E7",  # Hellblau
-    "VBZ/Q":    "E2EFDA",
-    "ONB":      "D9E1F2",
-    "BTM":      "F8CBAD",
-    "KTG":      "A9D18E",
-    "ERF9/TEL": "FF0000",
-    "ERF8/HUB": "FF6600",
-    "FREI":     "F2F2F2",  # Hellgrau
-    "":         "FFFFFF",
+# Farben für Aufgaben (EXAKT wie Referenzbild)
+TASK_COLORS = {
+    "KTG":       "A9D18E",  # Grün
+    "KGS":       "A9D18E",
+    "ABKL":      "FFC000",  # Orange
+    "TEL":       "92D050",  # Grün
+    "ERF7":      "00B0F0",  # Blau
+    "ERF7/Q":    "00B0F0",
+    "ERF7/HUB":  "00B0F0",
+    "ERF8":      "FF6600",  # Dunkelorange
+    "ERF8/Q":    "FF6600",
+    "ERF8/HUB":  "FF6600",
+    "ERF9":      "FF0000",  # Rot
+    "ERF9/Q":    "FF0000",
+    "ERF9/TEL":  "FF0000",
+    "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter
+    "ERF5":      "F4B084",  # Hellorange - Labor
+    "PO":        "D6DCE4",  # Grau
+    "PO/ABKL":   "FFC000",
+    "PO/TEL":    "92D050",
+    "PO/SCAN":   "A9D18E",  # Hellgrün
+    "HO":        "BDD7EE",  # Hellblau
+    "HO/Q":      "BDD7EE",
+    "VBZ/Q":     "C5E0B4",  # Lindgrün
+    "KSC Spez.": "FFFF00",  # Gelb
+    "TAGES PA":  "00FFFF",  # Cyan
+    "TAGESPA":   "00FFFF",
+    "RX Abo":    "D9D9D9",  # Grau
+    "Access":    "FF00FF",  # Magenta
+    "KSV":       "00FFFF",
+    "scanning":  "E2EFDA",
+    "Krankheit": "FF9999",
+    "KRANK":     "FF9999",
+    "Feiertag":  "FF0000",
+    "FERIEN":    "F2F2F2",
+    "TEL-16:30": "92D050",
+    "TEL 16:00": "92D050",
+    "ERF4/Access": "C6EFCE",
+    "":          "FFFFFF",
 }
 
+# Tagesverantwortung-Farben (für Header UND Legende)
+TV_COLORS = {
+    "Lara":      "00B050",  # Grün
+    "Stephi":    "FF00FF",  # Pink
+    "Silvana":   "FF6600",  # Orange
+    "Linda":     "FFFF00",  # Gelb
+}
+
+# PHC-Liste = dunkelblau
+PHC_COLOR = "0070C0"
+
+# Berechtigungen für Wochenaufgaben
+ONB_ERLAUBT = ["Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
+               "Isaura", "Martina", "Alessia", "Amra", "Nina", "Jesika", "Corinne"]
+DIREKT_ERLAUBT = ["Andrea A.", "Andrea G.", "Silvana"]
+BTM_ERLAUBT = ["Jesika", "Silvana", "Linda", "Lara", "Dipiga", "Isaura"]
+
 # ============================================================
-# MITARBEITER-DEFINITIONEN
+# MITARBEITER (NUR die 18 Kernmitarbeiter!)
 # ============================================================
 
 @dataclass
@@ -67,9 +92,7 @@ class Employee:
     name: str
     short: str
     pct: int
-    # Verfügbarkeit: dict von (day_idx, slot_idx) -> True/False
-    available: dict = field(default_factory=dict)
-    # Fähigkeiten/Rollen
+    available: Dict[Tuple[int, int], bool] = field(default_factory=dict)
     can_hub: bool = False
     can_rx_abo: bool = False
     can_schalter: bool = True
@@ -78,155 +101,121 @@ class Employee:
     can_direkt: bool = False
     can_vbz: bool = False
     is_tl: bool = False
-    # Tracking
-    schalter_last_week: bool = False
-    tel_count: int = 0
-    abkl_count: int = 0
-
-    def is_available(self, day_idx, slot_idx):
-        return self.available.get((day_idx, slot_idx), False)
+    
+    def is_available(self, day: int, slot: int) -> bool:
+        return self.available.get((day, slot), False)
 
 
-def create_employees(week_number):
-    """Erstellt alle Mitarbeiter mit Verfügbarkeit basierend auf Wochennummer."""
+def create_employees(week_number: int) -> Dict[str, Employee]:
+    """Erstellt NUR die 18 Kernmitarbeiter."""
     is_even_week = (week_number % 2 == 0)
-
     employees = {}
-
-    # --- Silvana Grossenbacher - 100% ---
-    e = Employee("Grossenbacher Silvana", "Silvana", 100, can_direkt=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    
+    def full_week(emp):
+        for d in range(5):
+            for s in range(2):
+                emp.available[(d, s)] = True
+    
+    # Silvana - 100% (TL)
+    e = Employee("Grossenbacher Silvana", "Silvana", 100, can_direkt=True, is_tl=True)
+    full_week(e)
     employees["Silvana"] = e
-
-    # --- Rexhaj Majlinda (Linda) - 90%, jeden 2. Freitag frei ---
-    e = Employee("Rexhaj Majlinda", "Linda", 90)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    
+    # Linda - 90%, jeden 2. Freitag frei (TL)
+    e = Employee("Rexhaj Majlinda", "Linda", 90, can_rx_abo=True, is_tl=True)
+    full_week(e)
     if is_even_week:
         e.available[(4, 0)] = False
         e.available[(4, 1)] = False
     employees["Linda"] = e
-
-    # --- Lara Ierano - 100% ---
-    e = Employee("Lara Ierano", "Lara", 100, can_rx_abo=True, can_vbz=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
-    e.can_hub = True
+    
+    # Lara - 100% (TL)
+    e = Employee("Lara Ierano", "Lara", 100, can_rx_abo=True, can_vbz=True, can_hub=True, is_tl=True)
+    full_week(e)
     employees["Lara"] = e
-
-    # --- Gygax Andrea - 100% ---
+    
+    # Andrea G. - 100%
     e = Employee("Gygax Andrea", "Andrea G.", 100, can_direkt=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     employees["Andrea G."] = e
-
-    # --- Jeyalingam Dipiga - 100% ---
+    
+    # Dipiga - 100%
     e = Employee("Jeyalingam Dipiga", "Dipiga", 100, can_hub=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     employees["Dipiga"] = e
-
-    # --- Bohnenblust Isaura - 90%, jeden 2. Mittwoch frei ---
+    
+    # Isaura - 90%, jeden 2. Mittwoch frei
     e = Employee("Bohnenblust Isaura", "Isaura", 90, can_rx_abo=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     if is_even_week:
         e.available[(2, 0)] = False
         e.available[(2, 1)] = False
     employees["Isaura"] = e
-
-    # --- Martina Pizzi - 80%, jeden Montag frei ---
+    
+    # Martina - 80%, jeden Montag frei
     e = Employee("Martina Pizzi", "Martina", 80, can_rx_abo=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     e.available[(0, 0)] = False
     e.available[(0, 1)] = False
     employees["Martina"] = e
-
-    # --- Giombanco Alessia - 100% ---
+    
+    # Alessia - 100%
     e = Employee("Giombanco Alessia", "Alessia", 100, can_hub=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     employees["Alessia"] = e
-
-    # --- Imsirovic Amra - 100% ---
+    
+    # Amra - 100%
     e = Employee("Imsirovic Amra", "Amra", 100, can_hub=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     employees["Amra"] = e
-
-    # --- Hänni Nina - 100% ---
+    
+    # Nina - 100%
     e = Employee("Hänni Nina", "Nina", 100, can_hub=True, can_vbz=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     employees["Nina"] = e
-
-    # --- Bushaj Jesika - 100% ---
+    
+    # Jesika - 100%
     e = Employee("Bushaj Jesika", "Jesika", 100, can_hub=True)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    full_week(e)
     employees["Jesika"] = e
-
-    # --- Siegrist Brigitte - 70%, Mi/Do/Fr NM frei ---
-    e = Employee("Siegrist Brigitte", "Brigitte", 70,
-                 can_schalter=False, can_scanning=False, can_onb=False)
-    for d in range(5):
-        e.available[(d, 0)] = True
-        e.available[(d, 1)] = True
+    
+    # Brigitte - 70%, Mi/Do/Fr NM frei
+    e = Employee("Siegrist Brigitte", "Brigitte", 70, can_schalter=False, can_scanning=False, can_onb=False)
+    full_week(e)
     e.available[(2, 1)] = False  # Mi NM
     e.available[(3, 1)] = False  # Do NM
     e.available[(4, 1)] = False  # Fr NM
     employees["Brigitte"] = e
-
-    # --- Florence Dornbierer - 70%, Mi NM + Fr frei ---
-    e = Employee("Florence Dornbierer", "Florence", 70,
-                 can_schalter=False, can_onb=False)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    
+    # Florence - 70%, Mi NM + Fr frei
+    e = Employee("Florence Dornbierer", "Florence", 70, can_schalter=False, can_onb=False)
+    full_week(e)
     e.available[(2, 1)] = False  # Mi NM
     e.available[(4, 0)] = False  # Fr
     e.available[(4, 1)] = False
     employees["Florence"] = e
-
-    # --- Eggimann Corinne - 90%, jeden 2. Freitag frei ---
-    e = Employee("Eggimann Corinne", "Corinne", 90,
-                 can_hub=True, can_schalter=False, can_scanning=False)
-    for d in range(5):
-        for s in range(2):
-            e.available[(d, s)] = True
+    
+    # Corinne - 90%, jeden 2. Freitag frei
+    e = Employee("Eggimann Corinne", "Corinne", 90, can_hub=True, can_schalter=False, can_scanning=False)
+    full_week(e)
     if is_even_week:
         e.available[(4, 0)] = False
         e.available[(4, 1)] = False
     employees["Corinne"] = e
-
-    # --- Schöni Saskia - 40%, nur Mi und Fr ---
-    e = Employee("Schöni Saskia", "Saskia", 40,
-                 can_schalter=False, can_scanning=False, can_onb=False)
+    
+    # Saskia - 40%, nur Mi und Fr
+    e = Employee("Schöni Saskia", "Saskia", 40, can_schalter=False, can_scanning=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
-    e.available[(2, 0)] = True  # Mi VM
-    e.available[(2, 1)] = True  # Mi NM
-    e.available[(4, 0)] = True  # Fr VM
-    e.available[(4, 1)] = True  # Fr NM
+    e.available[(2, 0)] = True  # Mi
+    e.available[(2, 1)] = True
+    e.available[(4, 0)] = True  # Fr
+    e.available[(4, 1)] = True
     employees["Saskia"] = e
-
-    # --- Milenkovic Dragana - 60%, Di/Do/Fr hier ---
-    e = Employee("Milenkovic Dragana", "Dragi", 60,
-                 can_hub=True, can_schalter=False, can_scanning=False, can_onb=False)
+    
+    # Dragi - 60%, Di/Do/Fr hier
+    e = Employee("Milenkovic Dragana", "Dragi", 60, can_hub=True, can_schalter=False, can_scanning=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
@@ -237,20 +226,18 @@ def create_employees(week_number):
     e.available[(4, 0)] = True  # Fr
     e.available[(4, 1)] = True
     employees["Dragi"] = e
-
-    # --- Bruzzese Maria - 30%, Mo und Do VM ---
-    e = Employee("Bruzzese Maria", "Maria B.", 30,
-                 can_schalter=False, can_scanning=False, can_onb=False)
+    
+    # Maria B. - 30%, Mo und Do VM hier
+    e = Employee("Bruzzese Maria", "Maria B.", 30, can_schalter=False, can_scanning=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
     e.available[(0, 0)] = True  # Mo VM
     e.available[(3, 0)] = True  # Do VM
     employees["Maria B."] = e
-
-    # --- Ackermann Andrea - 60%, Mo/Di/Mi hier ---
-    e = Employee("Ackermann Andrea", "Andrea A.", 60,
-                 can_direkt=True, can_schalter=False, can_onb=False)
+    
+    # Andrea A. - 60%, Mo/Di/Mi hier
+    e = Employee("Ackermann Andrea", "Andrea A.", 60, can_direkt=True, can_schalter=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
@@ -261,12 +248,12 @@ def create_employees(week_number):
     e.available[(2, 0)] = True  # Mi
     e.available[(2, 1)] = True
     employees["Andrea A."] = e
-
+    
     return employees
 
 
 # ============================================================
-# SCHEDULE-KLASSE
+# SCHEDULE
 # ============================================================
 
 class Schedule:
@@ -275,53 +262,62 @@ class Schedule:
         self.week_number = week_number
         self.week_start_date = week_start_date
         self.is_even_week = (week_number % 2 == 0)
-        # schedule[name][(day_idx, slot_idx)] = task_string
+        
         self.schedule = {name: {} for name in employees}
-        # Tracking für Constraints
         self.tel_count = {d: {s: 0 for s in range(2)} for d in range(5)}
         self.abkl_count = {d: {s: 0 for s in range(2)} for d in range(5)}
         self.erf8_assigned = {d: False for d in range(5)}
-        # Notizen / Sonderwünsche
-        self.notes = {}  # (name, day, slot) -> note string (e.g. "Arzttermin 14.45")
-        # Zeitangaben rechts
-        self.time_notes = {}  # name -> string
-
+        
+        # Tagesverantwortung: day -> name (GLEICHE Person für VM+NM!)
+        self.tagesverantwortung: Dict[int, str] = {}
+        
+        # PHC-Liste: day -> name
+        self.phc_liste: Dict[int, str] = {}
+        
+        # Wochenaufgaben: Je 1 Person pro Typ
+        self.wochenaufgabe_direkt: str = ""
+        self.wochenaufgabe_onb: str = ""
+        self.wochenaufgabe_btm: str = ""
+        
+        # Notizen (z.B. Arzttermine) - (name, day, slot) -> note
+        self.notes: Dict[Tuple[str, int, int], str] = {}
+        
+        self.conflicts = []
+    
     def assign(self, name, day, slot, task):
-        """Weist eine Aufgabe zu, wenn der Slot noch frei ist."""
+        if name not in self.employees:
+            return False
         if (day, slot) in self.schedule[name]:
             return False
         if not self.employees[name].is_available(day, slot):
             return False
+        
         self.schedule[name][(day, slot)] = task
         if "TEL" in task:
             self.tel_count[day][slot] += 1
         if "ABKL" in task:
             self.abkl_count[day][slot] += 1
+        if "ERF8" in task:
+            self.erf8_assigned[day] = True
         return True
-
+    
+    def force_assign(self, name, day, slot, task):
+        if name not in self.employees:
+            return
+        self.schedule[name][(day, slot)] = task
+        if "TEL" in task:
+            self.tel_count[day][slot] += 1
+        if "ABKL" in task:
+            self.abkl_count[day][slot] += 1
+    
     def is_free(self, name, day, slot):
         return ((day, slot) not in self.schedule[name]
                 and self.employees[name].is_available(day, slot))
-
+    
     def get_task(self, name, day, slot):
         return self.schedule[name].get((day, slot), "")
-
-    def get_assigned_names(self, day, slot, task_contains=""):
-        """Gibt Namen zurück, die an diesem Slot eine bestimmte Aufgabe haben."""
-        result = []
-        for name in self.employees:
-            t = self.get_task(name, day, slot)
-            if task_contains and task_contains in t:
-                result.append(name)
-            elif not task_contains and t:
-                result.append(name)
-        return result
-
-    def count_task(self, day, slot, task):
-        return len(self.get_assigned_names(day, slot, task))
-
-    def get_available_for_task(self, day, slot, exclude=None):
-        """Gibt verfügbare Mitarbeiter für einen Slot zurück."""
+    
+    def get_available(self, day, slot, exclude=None):
         result = []
         for name, emp in self.employees.items():
             if exclude and name in exclude:
@@ -336,115 +332,117 @@ class Schedule:
 # ============================================================
 
 def build_schedule(week_number, week_start_date, overrides=None, state_file="scheduler_state.json"):
-    """
-    Erstellt den Wochenplan.
-    overrides: dict von (name, day_idx, slot_idx) -> task_string für Sonderwünsche
-    """
     employees = create_employees(week_number)
     sched = Schedule(employees, week_number, week_start_date)
-
-    # Lade gespeicherten State (für Wechsel-Tracking)
+    
     state = load_state(state_file)
-
-    # ========================================
-    # WOCHE-GUARD: Nur einmal pro Woche toggeln
-    # Wenn erneut für gleiche Woche, State nicht ändern
-    # ========================================
+    
     last_week = state.get("last_generated_week", 0)
     is_new_week = (last_week != week_number)
+    
     if is_new_week:
         state["last_generated_week"] = week_number
-        # Alle Wechsel-Toggles drehen sich nur bei neuer Woche
         state["linda_ho_week"] = not state.get("linda_ho_week", False)
         state["labor_jesika"] = not state.get("labor_jesika", True)
         state["schalter_group"] = 1 - state.get("schalter_group", 0)
-        state["friday_tagesv_corinne"] = not state.get("friday_tagesv_corinne", True)
-        state["tl_monday_idx"] = state.get("tl_monday_idx", 0) + 1
-    # else: Re-Run für gleiche Woche → State bleibt identisch
-
-    # ========================================
-    # 0. SONDERWÜNSCHE / OVERRIDES eintragen
-    # ========================================
+        state["friday_phc_corinne"] = not state.get("friday_phc_corinne", True)
+        state["tl_monday_idx"] = (state.get("tl_monday_idx", 0) + 1) % 3
+        state["tv_start_day"] = (state.get("tv_start_day", 0) + 1) % 4
+        state["onb_idx"] = (state.get("onb_idx", 0) + 1) % len(ONB_ERLAUBT)
+        state["direkt_idx"] = (state.get("direkt_idx", 0) + 1) % len(DIREKT_ERLAUBT)
+        state["btm_idx"] = (state.get("btm_idx", 0) + 1) % len(BTM_ERLAUBT)
+    
+    # Overrides verarbeiten
     if overrides:
         for (name, day, slot), task in overrides.items():
             if name in employees:
-                sched.assign(name, day, slot, task)
                 if task.startswith("*"):
-                    sched.notes[(name, day, slot)] = task
-
-    # ========================================
-    # 1. FESTE ZUWEISUNGEN
-    # ========================================
-
-    # Maria B. Montagmorgen HO
-    if "Maria B." in employees:
-        sched.assign("Maria B.", 0, 0, "HO")
-
-    # Brigitte jeden Montag ERF9 (VM, NM TEL möglich)
+                    # Notiz (z.B. Arzttermin) - Person als abwesend markieren
+                    sched.notes[(name, day, slot)] = task[1:]  # ohne *
+                    sched.force_assign(name, day, slot, "")  # Slot blockieren
+                elif task in ["KRANK", "FERIEN", "Krankheit"]:
+                    sched.force_assign(name, day, slot, task)
+                else:
+                    sched.assign(name, day, slot, task)
+    
+    # ════════════════════════════════════════════════════════════
+    # FIXE ZUWEISUNGEN
+    # ════════════════════════════════════════════════════════════
+    
+    # Brigitte Mo ERF9 (ganztags)
     sched.assign("Brigitte", 0, 0, "ERF9")
-
-    # Dragi jeden Dienstag ERF9
+    sched.assign("Brigitte", 0, 1, "ERF9")
+    
+    # Dragi Di ERF9 (ganztags)
     if employees["Dragi"].is_available(1, 0):
         sched.assign("Dragi", 1, 0, "ERF9")
     if employees["Dragi"].is_available(1, 1):
-        sched.assign("Dragi", 1, 1, "ERF9")
-
-    # Florence PÖ wenn am Dienstag
-    if employees["Florence"].is_available(1, 0):
-        sched.assign("Florence", 1, 0, "PO")
-
-    # Dipiga KGS: Di-morgens und Do-nachmittags
-    sched.assign("Dipiga", 1, 0, "KGS")
+        sched.assign("Dragi", 1, 1, "ERF9/TEL")
+    
+    # Maria B. Mo HO
+    if employees["Maria B."].is_available(0, 0):
+        sched.assign("Maria B.", 0, 0, "HO")
+    
+    # Linda alle 2 Wochen Di HO
+    if state.get("linda_ho_week", False):
+        sched.assign("Linda", 1, 0, "HO/Q")
+        sched.assign("Linda", 1, 1, "HO/Q")
+    
+    # Dipiga TAGES PA Di VM, KGS Do NM
+    sched.assign("Dipiga", 1, 0, "TAGES PA")
     sched.assign("Dipiga", 3, 1, "KGS")
-
-    # Martina KSC Spez.: Di und Do morgens
+    
+    # Martina KSC Spez. Di/Do VM
     if employees["Martina"].is_available(1, 0):
         sched.assign("Martina", 1, 0, "KSC Spez.")
     if employees["Martina"].is_available(3, 0):
         sched.assign("Martina", 3, 0, "KSC Spez.")
-
-    # Linda alle 2 Wochen Dienstag HO (State-basiert)
-    if state.get("linda_ho_week", False):
-        sched.assign("Linda", 1, 0, "HO")
-        sched.assign("Linda", 1, 1, "HO")
-
-    # Labor: Jesika und Dipiga im Wochenwechsel, Mi NM (State-basiert)
+    
+    # Labor: Jesika/Dipiga Mi NM
     if state.get("labor_jesika", True):
-        sched.assign("Jesika", 2, 1, "Labor")
+        sched.assign("Jesika", 2, 1, "ERF5")
     else:
-        sched.assign("Dipiga", 2, 1, "Labor")
-
-    # ========================================
-    # 2. TEL - HÖCHSTE PRIORITÄT
-    #    4 am Montagmorgen, sonst 3
-    # ========================================
-    # Bevorzugte TEL-Kandidaten (alle ausser TL und spezielle)
-    tel_prefer = [n for n in employees
-                  if n not in ["Brigitte", "Maria B."]
-                  and employees[n].is_available(0, 0)]
+        sched.assign("Dipiga", 2, 1, "ERF5")
+    
+    # ════════════════════════════════════════════════════════════
+    # TEL (4 Mo VM, sonst 3)
+    # ════════════════════════════════════════════════════════════
+    
+    tl_names = [n for n, emp in employees.items() if emp.is_tl]
+    tl_tel_count = {n: 0 for n in tl_names}
+    
     for day in range(5):
         for slot in range(2):
             target = 4 if (day == 0 and slot == 0) else 3
-            current = sched.tel_count[day][slot]
-            needed = target - current
+            needed = target - sched.tel_count[day][slot]
             if needed <= 0:
                 continue
-            available = sched.get_available_for_task(day, slot)
-            random.shuffle(available)
+            
+            available = sched.get_available(day, slot)
+            tl_avail = [n for n in available if n in tl_tel_count and tl_tel_count[n] < 2]
+            other = [n for n in available if n not in tl_names]
+            random.shuffle(tl_avail)
+            random.shuffle(other)
+            
             count = 0
-            for name in available:
+            for name in tl_avail + other:
                 if count >= needed:
                     break
                 if sched.assign(name, day, slot, "TEL"):
                     count += 1
-
-    # ========================================
-    # 3. ABKL - 2 pro Halbtag
-    # ========================================
+                    if name in tl_tel_count:
+                        tl_tel_count[name] += 1
+    
+    # ════════════════════════════════════════════════════════════
+    # ABKL (2 pro Halbtag)
+    # ════════════════════════════════════════════════════════════
+    
     for day in range(5):
         for slot in range(2):
             needed = 2 - sched.abkl_count[day][slot]
-            available = sched.get_available_for_task(day, slot)
+            if needed <= 0:
+                continue
+            available = sched.get_available(day, slot)
             random.shuffle(available)
             count = 0
             for name in available:
@@ -452,463 +450,464 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                     break
                 if sched.assign(name, day, slot, "ABKL"):
                     count += 1
-
-    # ========================================
-    # 4. ERF7/HUB ZUWEISUNGEN (halbtags)
-    # ========================================
-    hub_eligible = ["Jesika", "Dragi", "Lara", "Corinne", "Dipiga", "Nina", "Amra", "Alessia"]
-    hub_assigned_today = {d: 0 for d in range(5)}
-
+    
+    # ════════════════════════════════════════════════════════════
+    # ERF8 (1/Tag)
+    # ════════════════════════════════════════════════════════════
+    
+    erf8_candidates = [n for n in employees if n not in ["Maria B.", "Saskia"]]
+    random.shuffle(erf8_candidates)
+    
     for day in range(5):
-        random.shuffle(hub_eligible)
-        for name in hub_eligible:
-            if hub_assigned_today[day] >= 2:
+        if sched.erf8_assigned[day]:
+            continue
+        for name in erf8_candidates:
+            if sched.is_free(name, day, 0):
+                sched.assign(name, day, 0, "ERF8")
                 break
-            for slot in [0, 1]:
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "ERF7/HUB")
-                    hub_assigned_today[day] += 1
-                    break
-
-    # ========================================
-    # 5. ERF9 Mi-Fr (undefiniert, 1 Person zuweisen)
-    # ========================================
-    erf9_candidates = [n for n in employees
-                       if n not in ["Brigitte", "Dragi"]]
+            elif sched.is_free(name, day, 1):
+                sched.assign(name, day, 1, "ERF8")
+                break
+    
+    # ════════════════════════════════════════════════════════════
+    # ERF9 Mi-Fr
+    # ════════════════════════════════════════════════════════════
+    
+    erf9_candidates = [n for n in employees if n not in ["Brigitte", "Dragi"]]
     random.shuffle(erf9_candidates)
-    for day in [2, 3, 4]:  # Mi, Do, Fr
+    
+    for day in [2, 3, 4]:
         for name in erf9_candidates:
             if sched.is_free(name, day, 0):
                 sched.assign(name, day, 0, "ERF9")
                 break
-
-    # ========================================
-    # 6. ERF8 - 1 Person pro Tag
-    # ========================================
-    erf8_candidates = [n for n in employees if n not in ["Maria B.", "Saskia"]]
-    random.shuffle(erf8_candidates)
+    
+    # ════════════════════════════════════════════════════════════
+    # ERF7/HUB
+    # ════════════════════════════════════════════════════════════
+    
+    hub_eligible = ["Jesika", "Dragi", "Lara", "Corinne", "Dipiga", "Nina", "Amra", "Alessia"]
+    
     for day in range(5):
-        for name in erf8_candidates:
-            if sched.is_free(name, day, 0) or sched.is_free(name, day, 1):
-                slot = 0 if sched.is_free(name, day, 0) else 1
-                sched.assign(name, day, slot, "ERF8")
-                sched.erf8_assigned[day] = True
+        random.shuffle(hub_eligible)
+        hub_count = 0
+        for name in hub_eligible:
+            if hub_count >= 2:
                 break
-
-    # ========================================
-    # 7. SCHALTER (ERF4/SCH) - alle 2 Wochen
-    # ========================================
-    schalter_eligible = []
-    for name, emp in employees.items():
-        if emp.can_schalter and name not in ["Linda", "Florence", "Corinne",
-                                              "Maria B.", "Andrea A.",
-                                              "Brigitte", "Saskia", "Dragi"]:
-            schalter_eligible.append(name)
-
-    schalter_this_week = state.get("schalter_group", 0)
-    random.shuffle(schalter_eligible)
+            for slot in [0, 1]:
+                if sched.is_free(name, day, slot):
+                    sched.assign(name, day, slot, "ERF7/HUB")
+                    hub_count += 1
+                    break
+    
+    # ════════════════════════════════════════════════════════════
+    # SCHALTER
+    # ════════════════════════════════════════════════════════════
+    
+    schalter_exclude = {"Linda", "Florence", "Corinne", "Maria B.", "Andrea A.",
+                        "Brigitte", "Saskia", "Dragi"}
+    schalter_eligible = sorted([n for n in employees if employees[n].can_schalter and n not in schalter_exclude])
+    
+    schalter_group = state.get("schalter_group", 0)
     mid = len(schalter_eligible) // 2
-    if schalter_this_week == 0:
-        schalter_active = schalter_eligible[:mid]
-    else:
-        schalter_active = schalter_eligible[mid:]
-
+    schalter_active = schalter_eligible[:mid] if schalter_group == 0 else schalter_eligible[mid:]
+    
     for name in schalter_active:
-        assigned = False
         for day in range(5):
-            if assigned:
-                break
             for slot in [0, 1]:
                 if sched.is_free(name, day, slot):
                     sched.assign(name, day, slot, "ERF4/SCH")
-                    assigned = True
                     break
-
-    # ========================================
-    # 8. RX ABO: Lara, Linda, Isaura, Martina
-    # ========================================
-    rx_abo_people = ["Lara", "Linda", "Isaura", "Martina"]
-    for name in rx_abo_people:
-        assigned = False
-        for day in range(5):
-            if assigned:
-                break
-            for slot in [0, 1]:
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "Fx Abo")
-                    assigned = True
-                    break
-
-    # ========================================
-    # 9. DIREKTBESTELLUNG: Andrea A., Andrea G., Silvana
-    # ========================================
-    direkt_people = ["Andrea A.", "Andrea G.", "Silvana"]
-    for name in direkt_people:
-        assigned = False
-        for day in range(5):
-            if assigned:
-                break
-            for slot in [1, 0]:  # NM bevorzugt
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "Direkt")
-                    assigned = True
-                    break
-
-    # ========================================
-    # 10. VORBEZÜGE: Lara, Nina
-    # ========================================
-    for name in ["Lara", "Nina"]:
-        for day in range(5):
-            if sched.is_free(name, day, 0):
-                sched.assign(name, day, 0, "VBZ/Q")
-                break
-
-    # ========================================
-    # 11. PO/SCANNING für übrige (wo erlaubt)
-    # ========================================
-    no_scanning = ["Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"]
-    for name in employees:
-        if name in no_scanning:
-            continue
-        for day in range(5):
-            for slot in range(2):
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "PO/SCAN")
-
-    # ========================================
-    # 12. ONB zuweisen (wo erlaubt)
-    # ========================================
-    no_onb = ["Brigitte", "Florence", "Saskia", "Dragi", "Maria B.", "Andrea A."]
-    for name in employees:
-        if name in no_onb:
-            continue
-        for day in range(5):
-            for slot in range(2):
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "ONB")
-
-    # ========================================
-    # 13. Restliche Slots mit ERF7 füllen
-    # ========================================
+            else:
+                continue
+            break
+    
+    # ════════════════════════════════════════════════════════════
+    # Restliche Slots
+    # ════════════════════════════════════════════════════════════
+    
+    no_scanning = {"Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"}
+    
     for name in employees:
         for day in range(5):
             for slot in range(2):
                 if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "ERF7")
-
-    # ========================================
-    # 14. TAGESVERANTWORTUNG / 18-Uhr-Liste
-    # ========================================
-    # Mo: TL im Wechsel, Di: Dipiga, Fr: Corinne/Andrea G. im Wechsel
-    # State wurde bereits oben getoggelt (nur bei neuer Woche)
-    tagesv = {}
-    tagesv[1] = "Dipiga"  # Di immer Dipiga
-    if state.get("friday_tagesv_corinne", True):
-        tagesv[4] = "Corinne"
-    else:
-        tagesv[4] = "Andrea G."
-    # TL Monday: index bestimmt wer dran ist
-    tagesv[0] = f"TL ({state.get('tl_monday_idx', 0) % 2 + 1})"
-
-    sched.tagesverantwortung = tagesv
-
-    # State speichern
+                    if employees[name].is_tl:
+                        sched.assign(name, day, slot, "ERF7/Q")
+                    elif name not in no_scanning:
+                        sched.assign(name, day, slot, "PO/SCAN" if random.random() > 0.5 else "ERF7")
+                    else:
+                        sched.assign(name, day, slot, "ERF7")
+    
+    # ════════════════════════════════════════════════════════════
+    # TAGESVERANTWORTUNG (GLEICHE Person für VM + NM!)
+    # ════════════════════════════════════════════════════════════
+    
+    tl_rotation = ["Lara", "Silvana", "Linda", "Silvana", "Lara"]  # Mo-Fr
+    tv_start = state.get("tv_start_day", 0)
+    
+    for day in range(5):
+        # Rotiere durch TL
+        tl_idx = (tv_start + day) % 3
+        tl_person = ["Lara", "Silvana", "Linda"][tl_idx]
+        sched.tagesverantwortung[day] = tl_person
+    
+    # ════════════════════════════════════════════════════════════
+    # PHC-LISTE
+    # ════════════════════════════════════════════════════════════
+    
+    tl_monday = ["Silvana", "Linda", "Lara"]
+    tl_idx = state.get("tl_monday_idx", 0)
+    sched.phc_liste[0] = tl_monday[tl_idx % 3]
+    sched.phc_liste[1] = "Dipiga"
+    
+    available_mi = [n for n in employees if employees[n].is_available(2, 1)]
+    sched.phc_liste[2] = random.choice(available_mi) if available_mi else ""
+    
+    available_do = [n for n in employees if employees[n].is_available(3, 1)]
+    sched.phc_liste[3] = random.choice(available_do) if available_do else ""
+    
+    sched.phc_liste[4] = "Corinne" if state.get("friday_phc_corinne", True) else "Andrea G."
+    
+    # ════════════════════════════════════════════════════════════
+    # WOCHENAUFGABEN (je 1 Person pro Typ)
+    # ════════════════════════════════════════════════════════════
+    
+    sched.wochenaufgabe_direkt = DIREKT_ERLAUBT[state.get("direkt_idx", 0) % len(DIREKT_ERLAUBT)]
+    sched.wochenaufgabe_onb = ONB_ERLAUBT[state.get("onb_idx", 0) % len(ONB_ERLAUBT)]
+    sched.wochenaufgabe_btm = BTM_ERLAUBT[state.get("btm_idx", 0) % len(BTM_ERLAUBT)]
+    
     save_state(state, state_file)
-
     return sched
 
 
-# ============================================================
-# STATE PERSISTENCE (für Wechsel über Wochen)
-# ============================================================
-
 def load_state(filepath):
     if os.path.exists(filepath):
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
     return {}
 
+
 def save_state(state, filepath):
-    with open(filepath, 'w') as f:
+    with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2)
 
 
 # ============================================================
-# EXCEL-AUSGABE
+# EXCEL AUSGABE
 # ============================================================
 
 def write_excel(sched, output_path):
-    """Schreibt den Arbeitsplan als formatierte Excel-Datei."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Arbeitsplan"
-
-    # Datumstring
+    
     start = sched.week_start_date
     end = start + timedelta(days=4)
     date_str = f"{start.strftime('%d.%m.%Y')}-{end.strftime('%d.%m.%Y')}"
-
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    header_font = Font(bold=True, size=10, name='Arial')
+    
+    thin = Border(left=Side(style='thin'), right=Side(style='thin'),
+                  top=Side(style='thin'), bottom=Side(style='thin'))
+    hdr_font = Font(bold=True, size=10, name='Arial')
     cell_font = Font(size=9, name='Arial')
-    title_font = Font(bold=True, size=12, name='Arial')
-
-    # Titel
-    ws.merge_cells('A1:L1')
-    ws['A1'] = date_str
-    ws['A1'].font = title_font
-    ws['A1'].alignment = Alignment(horizontal='center')
-
-    # Header Zeile 2 + 3
-    row = 3
-    headers_row1 = ["Name", "%"]
+    leg_font = Font(size=8, name='Arial')
+    
+    # ════════════════════════════════════════════════════════════
+    # LEGENDE (Zeilen 1-6)
+    # ════════════════════════════════════════════════════════════
+    
+    # Zeile 1
+    ws['A1'] = "Legende"
+    ws['A1'].font = hdr_font
+    
+    legend1 = [("KTG", "A9D18E"), ("ABKL", "FFC000"), ("TEL", "92D050"),
+               ("", "FFFFFF"), ("ERF7", "00B0F0"), ("PO", "D6DCE4"),
+               ("PHC-Liste", "0070C0"), ("ERF9", "FF0000"), ("Acces", "FF00FF")]
+    for i, (txt, col) in enumerate(legend1):
+        c = ws.cell(row=1, column=3+i, value=txt)
+        c.font = leg_font
+        c.alignment = Alignment(horizontal='center')
+        if col:
+            c.fill = PatternFill('solid', fgColor=col)
+            if col in ["0070C0", "FF0000"]:
+                c.font = Font(size=8, color='FFFFFF')
+    
+    # Wochenaufgabe Header
+    ws.cell(row=1, column=13, value="Wochen").font = leg_font
+    ws.cell(row=1, column=14, value="Aufgabe").font = leg_font
+    ws.cell(row=1, column=15, value="Bemerkungen").font = hdr_font
+    
+    # TV-Legende (rechts)
+    ws.cell(row=2, column=13, value="Lara").fill = PatternFill('solid', fgColor='00B050')
+    ws.cell(row=2, column=13).font = Font(size=8, color='FFFFFF')
+    ws.cell(row=2, column=14, value="Stephi").fill = PatternFill('solid', fgColor='FF00FF')
+    ws.cell(row=2, column=14).font = Font(size=8, color='FFFFFF')
+    
+    # Zeile 2: Erklärung
+    ws['A2'] = "Erklärung"
+    ws['B2'] = "AE"
+    ws['B2'].fill = PatternFill('solid', fgColor='FFC000')
+    expl1 = ["Kein Tages-geschäft", "Abklärung", "Telefon", "Frei", 
+             "Erfassung", "Post-öffnung", "PHC-Liste", "17.30 Dienst", ""]
+    for i, txt in enumerate(expl1):
+        ws.cell(row=2, column=3+i, value=txt).font = leg_font
+    
+    # Zeile 3
+    ws['A3'] = "Legende"
+    legend3 = [("HO", "BDD7EE"), ("Krankheit", "FF9999"), ("scanning", "E2EFDA"),
+               ("PO/SCAN", "A9D18E"), ("KSV", "00FFFF"), ("ERF4/SCH", "C6EFCE"),
+               ("ERF5", "F4B084"), ("Feiertag", "FF0000")]
+    for i, (txt, col) in enumerate(legend3):
+        c = ws.cell(row=3, column=3+i, value=txt)
+        c.font = leg_font
+        if col:
+            c.fill = PatternFill('solid', fgColor=col)
+    
+    # TV-Legende Fortsetzung
+    ws.cell(row=3, column=12, value="Silvana").fill = PatternFill('solid', fgColor='FF6600')
+    ws.cell(row=3, column=12).font = Font(size=8, color='FFFFFF')
+    ws.cell(row=4, column=12, value="Linda").fill = PatternFill('solid', fgColor='FFFF00')
+    ws.cell(row=4, column=12).font = Font(size=8)
+    
+    # Zeile 4: Erklärung
+    ws['A4'] = "Erklärung"
+    expl2 = ["Home Office", "Krankheit", "Scanning / Ablage", "Postöffnung & Scanning",
+             "KSV Aushilfe", "Schalter", "Labor", ""]
+    for i, txt in enumerate(expl2):
+        ws.cell(row=4, column=3+i, value=txt).font = leg_font
+    
+    # Zeile 5-6: KD
+    ws['A5'] = "Legende"
+    ws['B5'] = "KD"
+    ws['B5'].fill = PatternFill('solid', fgColor='E2EFDA')
+    legend5 = [("ID", "BDD7EE"), ("Krankheit", "FF9999"), ("scanning", "E2EFDA"),
+               ("PO/SCAN", "A9D18E"), ("", "FFFFFF"), ("KD KOMM", "FFFFFF"),
+               ("AE", "FFC000"), ("", "FFFFFF"), ("ERP", "C6EFCE"), ("Cafeteria", "FF0000")]
+    for i, (txt, col) in enumerate(legend5):
+        c = ws.cell(row=5, column=3+i, value=txt)
+        c.font = leg_font
+        if col:
+            c.fill = PatternFill('solid', fgColor=col)
+    
+    ws['A6'] = "Erklärung"
+    expl3 = ["Identifikation", "Krank", "Scanning / Ablage", "Postöffnung & Scanning",
+             "Frei", "Postfach KD KOMM", "im AP AE schauen", "Spätdienst bis 17.30",
+             "ERP Testen", ""]
+    for i, txt in enumerate(expl3):
+        ws.cell(row=6, column=3+i, value=txt).font = leg_font
+    
+    # ════════════════════════════════════════════════════════════
+    # DATUM (Zeile 8)
+    # ════════════════════════════════════════════════════════════
+    
+    ws.merge_cells('A8:L8')
+    ws['A8'] = date_str
+    ws['A8'].font = Font(bold=True, size=12, name='Arial')
+    ws['A8'].alignment = Alignment(horizontal='center')
+    
+    # ════════════════════════════════════════════════════════════
+    # HEADER (Zeile 10-11)
+    # ════════════════════════════════════════════════════════════
+    
+    row = 10
+    headers = ["Name", "%"]
     for day in DAYS:
-        headers_row1.extend([day, ""])
-    # Zeitnotizen
-    headers_row1.append("Zeiten")
-
-    headers_row2 = ["", ""]
-    for _ in DAYS:
-        headers_row2.extend(["Vormittag", "Nachmittag"])
-    headers_row2.append("")
-
-    for col, val in enumerate(headers_row1, 1):
-        cell = ws.cell(row=row, column=col, value=val)
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal='center')
-        cell.fill = PatternFill('solid', fgColor='4472C4')
-        cell.font = Font(bold=True, size=10, name='Arial', color='FFFFFF')
-        cell.border = thin_border
-
-    row = 4
-    for col, val in enumerate(headers_row2, 1):
-        cell = ws.cell(row=row, column=col, value=val)
-        cell.font = Font(bold=True, size=8, name='Arial')
-        cell.alignment = Alignment(horizontal='center')
-        cell.fill = PatternFill('solid', fgColor='D9E2F3')
-        cell.border = thin_border
-
-    # Merge Tag-Header über 2 Spalten
-    for i, day in enumerate(DAYS):
+        headers.extend([day, ""])
+    headers.extend(["Wochen Aufgabe", "Bemerkungen"])
+    
+    for col, val in enumerate(headers, 1):
+        c = ws.cell(row=row, column=col, value=val)
+        c.font = Font(bold=True, size=10, color='FFFFFF')
+        c.alignment = Alignment(horizontal='center')
+        c.fill = PatternFill('solid', fgColor='4472C4')
+        c.border = thin
+    
+    for i in range(5):
         start_col = 3 + i * 2
-        ws.merge_cells(start_row=3, start_column=start_col, end_row=3, end_column=start_col + 1)
-        # Donnerstag/Freitag spezielle Farbe
-        if day in ["Donnerstag"]:
-            for c in [start_col, start_col + 1]:
-                ws.cell(row=3, column=c).fill = PatternFill('solid', fgColor='00B050')
-                ws.cell(row=3, column=c).font = Font(bold=True, size=10, name='Arial', color='FFFFFF')
-
+        ws.merge_cells(start_row=row, start_column=start_col, end_row=row, end_column=start_col+1)
+    
+    # Zeile 11: VM/NM mit Tagesverantwortungs-Farben (GLEICHE Farbe für VM+NM!)
+    row = 11
+    ws.cell(row=row, column=1, value="").border = thin
+    ws.cell(row=row, column=2, value="").border = thin
+    
+    for day in range(5):
+        tv_name = sched.tagesverantwortung.get(day, "")
+        tv_color = TV_COLORS.get(tv_name, "D9E2F3")
+        
+        for slot in range(2):
+            col = 3 + day * 2 + slot
+            c = ws.cell(row=row, column=col, value=SLOTS[slot])
+            c.font = Font(bold=True, size=8)
+            c.alignment = Alignment(horizontal='center')
+            c.border = thin
+            c.fill = PatternFill('solid', fgColor=tv_color)
+            if tv_name in ["Lara", "Silvana"]:
+                c.font = Font(bold=True, size=8, color='FFFFFF')
+    
+    ws.cell(row=row, column=13, value="").border = thin
+    ws.cell(row=row, column=14, value="").border = thin
+    
+    # ════════════════════════════════════════════════════════════
+    # MITARBEITER
+    # ════════════════════════════════════════════════════════════
+    
+    order = ["Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
+             "Isaura", "Martina", "Alessia", "Amra", "Nina",
+             "Jesika", "Brigitte", "Florence", "Corinne", "Saskia",
+             "Dragi", "Maria B.", "Andrea A."]
+    
+    row = 12
+    for name in order:
+        if name not in sched.employees:
+            continue
+        emp = sched.employees[name]
+        
+        ws.cell(row=row, column=1, value=emp.name).font = cell_font
+        ws.cell(row=row, column=1).border = thin
+        
+        ws.cell(row=row, column=2, value=emp.pct).font = cell_font
+        ws.cell(row=row, column=2).alignment = Alignment(horizontal='center')
+        ws.cell(row=row, column=2).border = thin
+        
+        for day in range(5):
+            for slot in range(2):
+                col = 3 + day * 2 + slot
+                task = sched.get_task(name, day, slot)
+                
+                c = ws.cell(row=row, column=col, value=task)
+                c.font = cell_font
+                c.alignment = Alignment(horizontal='center')
+                c.border = thin
+                
+                color = get_task_color(task)
+                if color:
+                    c.fill = PatternFill('solid', fgColor=color)
+                
+                # PHC blau
+                if slot == 1 and sched.phc_liste.get(day) == name:
+                    c.fill = PatternFill('solid', fgColor=PHC_COLOR)
+                    c.font = Font(bold=True, size=9, color='FFFFFF')
+        
+        # Wochenaufgabe
+        wa_cell = ws.cell(row=row, column=13)
+        wa_cell.border = thin
+        wa_parts = []
+        if name == sched.wochenaufgabe_direkt:
+            wa_parts.append("Direkt")
+        if name == sched.wochenaufgabe_onb:
+            wa_parts.append("ONB")
+        if name == sched.wochenaufgabe_btm:
+            wa_parts.append("BTM")
+        if wa_parts:
+            wa_cell.value = "\n".join(wa_parts)
+            wa_cell.font = Font(bold=True, size=9)
+            wa_cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        
+        # Bemerkungen (inkl. Termine/Notizen)
+        bem_parts = []
+        for day in range(5):
+            for slot in range(2):
+                note_key = (name, day, slot)
+                if note_key in sched.notes:
+                    bem_parts.append(f"{DAYS[day][:2]} {SLOTS[slot][:2]}: {sched.notes[note_key]}")
+        
+        bem_cell = ws.cell(row=row, column=14)
+        bem_cell.border = thin
+        if bem_parts:
+            bem_cell.value = "\n".join(bem_parts)
+            bem_cell.font = cell_font
+            bem_cell.alignment = Alignment(wrap_text=True, vertical='top')
+        
+        row += 1
+    
     # Spaltenbreiten
     ws.column_dimensions['A'].width = 24
     ws.column_dimensions['B'].width = 5
     for i in range(5):
         ws.column_dimensions[get_column_letter(3 + i * 2)].width = 12
         ws.column_dimensions[get_column_letter(4 + i * 2)].width = 12
-    ws.column_dimensions[get_column_letter(13)].width = 18
-
-    # Mitarbeiter-Reihenfolge (wie im Bild)
-    order = [
-        "Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
-        "Isaura", "Martina", "Alessia", "Amra", "Nina",
-        "Jesika", "Brigitte", "Florence", "Corinne", "Saskia",
-        "Dragi", "Maria B.", "Andrea A."
-    ]
-
-    row = 5
-    for name in order:
-        if name not in sched.employees:
-            continue
-        emp = sched.employees[name]
-
-        # Name
-        cell = ws.cell(row=row, column=1, value=emp.name)
-        cell.font = cell_font
-        cell.border = thin_border
-
-        # Prozent
-        cell = ws.cell(row=row, column=2, value=emp.pct)
-        cell.font = cell_font
-        cell.alignment = Alignment(horizontal='center')
-        cell.border = thin_border
-
-        # Aufgaben pro Tag/Slot
-        for day in range(5):
-            for slot in range(2):
-                col = 3 + day * 2 + slot
-                task = sched.get_task(name, day, slot)
-
-                # Prüfe ob nicht verfügbar
-                if not emp.is_available(day, slot) and not task:
-                    task = ""
-
-                cell = ws.cell(row=row, column=col, value=task)
-                cell.font = cell_font
-                cell.alignment = Alignment(horizontal='center')
-                cell.border = thin_border
-
-                # Farbe setzen
-                color = get_color(task)
-                if color:
-                    cell.fill = PatternFill('solid', fgColor=color)
-
-                # Sonderwunsch-Notiz
-                note_key = (name, day, slot)
-                if note_key in sched.notes:
-                    cell.comment = None  # könnte man als Comment hinzufügen
-
-        # Zeitnotiz
-        if name in sched.time_notes:
-            cell = ws.cell(row=row, column=13, value=sched.time_notes[name])
-            cell.font = cell_font
-            cell.border = thin_border
-
-        row += 1
-
-    # ========================================
-    # Allgemein-Zeile am Ende
-    # ========================================
-    row += 1
-    cell = ws.cell(row=row, column=1, value="Allgemein")
-    cell.font = Font(bold=True, size=10, name='Arial')
-    cell.fill = PatternFill('solid', fgColor='FFC000')
-    cell.border = thin_border
-
-    for day in range(5):
-        for slot in range(2):
-            col = 3 + day * 2 + slot
-            cell = ws.cell(row=row, column=col, value=SLOTS[slot])
-            cell.font = Font(size=8, name='Arial')
-            cell.alignment = Alignment(horizontal='center')
-            cell.border = thin_border
-
-    # ========================================
-    # Zusammenfassung / Prüfung
-    # ========================================
-    row += 2
-    ws.cell(row=row, column=1, value="KONTROLLE").font = Font(bold=True, size=10, name='Arial')
-    row += 1
-    for day in range(5):
-        for slot in range(2):
-            tel_c = sched.tel_count[day][slot]
-            abkl_c = sched.abkl_count[day][slot]
-            target_tel = 4 if (day == 0 and slot == 0) else 3
-            status_tel = "✓" if tel_c >= target_tel else f"FEHLT ({tel_c}/{target_tel})"
-            status_abkl = "✓" if abkl_c >= 2 else f"FEHLT ({abkl_c}/2)"
-
-            ws.cell(row=row, column=1,
-                    value=f"{DAYS[day]} {SLOTS[slot]}").font = cell_font
-            ws.cell(row=row, column=2,
-                    value=f"TEL: {status_tel}").font = cell_font
-            ws.cell(row=row, column=4,
-                    value=f"ABKL: {status_abkl}").font = cell_font
-            row += 1
-
-    # Legende
-    row += 1
-    ws.cell(row=row, column=1, value="LEGENDE").font = Font(bold=True, size=10, name='Arial')
-    row += 1
-    legend_items = [
-        ("TEL", "Telefon"), ("ABKL", "Abklärung"), ("ERF7", "Erfassung 7"),
-        ("ERF8", "Erfassung 8"), ("ERF9", "Erfassung 9"), ("ERF7/HUB", "Hub (mit ERF7)"),
-        ("ERF4/SCH", "Schalter"), ("PO/SCAN", "Post/Scanning"), ("HO", "Home Office"),
-        ("KSC Spez.", "KSC Spezial"), ("KGS", "KGS"), ("Labor", "Labor"),
-        ("Fx Abo", "RX Abo"), ("Direkt", "Direktbestellung"), ("VBZ/Q", "Vorbezüge"),
-        ("ONB", "ONB"), ("TAGESPA", "Tagesverantwortung"),
-    ]
-    for task, desc in legend_items:
-        color = get_color(task)
-        cell = ws.cell(row=row, column=1, value=task)
-        cell.font = cell_font
-        if color:
-            cell.fill = PatternFill('solid', fgColor=color)
-        ws.cell(row=row, column=2, value=desc).font = cell_font
-        row += 1
-
+    ws.column_dimensions[get_column_letter(13)].width = 12
+    ws.column_dimensions[get_column_letter(14)].width = 15
+    
     wb.save(output_path)
     return output_path
 
 
-def get_color(task):
+def get_task_color(task):
     if not task:
         return None
-    for key in COLORS:
-        if task == key or task.startswith(key):
-            return COLORS[key]
+    if task in TASK_COLORS:
+        return TASK_COLORS[task]
+    for key in sorted(TASK_COLORS.keys(), key=len, reverse=True):
+        if task.startswith(key):
+            return TASK_COLORS[key]
     return None
 
 
-# ============================================================
-# SONDERWÜNSCHE EINLESEN
-# ============================================================
-
-def load_overrides(filepath="sonderwuensche.json"):
-    """
-    Lädt Sonderwünsche aus einer JSON-Datei.
-    Format:
-    {
-        "overrides": [
-            {"name": "Martina", "day": 4, "slot": 1, "task": "*Arzttermin 14.45"},
-            {"name": "Isaura", "day": 2, "slot": 1, "task": "ONB"}
-        ]
-    }
-    day: 0=Mo, 1=Di, 2=Mi, 3=Do, 4=Fr
-    slot: 0=Vormittag, 1=Nachmittag
-    task mit * = wird als Notiz angezeigt (z.B. Arzttermin)
-    """
-    if not os.path.exists(filepath):
-        return {}
-    with open(filepath, 'r') as f:
-        data = json.load(f)
-    result = {}
-    for item in data.get("overrides", []):
-        key = (item["name"], item["day"], item["slot"])
-        result[key] = item["task"]
-    return result
+def validate_schedule(sched):
+    issues = []
+    if sched.tel_count[0][0] < 4:
+        issues.append(f"❌ Mo VM TEL: {sched.tel_count[0][0]}/4")
+    for d in range(5):
+        for s in range(2):
+            if d == 0 and s == 0:
+                continue
+            if sched.tel_count[d][s] < 3:
+                issues.append(f"❌ {DAYS[d]} {SLOTS[s]} TEL: {sched.tel_count[d][s]}/3")
+    for d in range(5):
+        for s in range(2):
+            if sched.abkl_count[d][s] < 2:
+                issues.append(f"❌ {DAYS[d]} {SLOTS[s]} ABKL: {sched.abkl_count[d][s]}/2")
+    for d in range(5):
+        if not sched.erf8_assigned[d]:
+            issues.append(f"❌ {DAYS[d]} ERF8: Nicht besetzt")
+    return issues
 
 
+def get_next_monday(ref=None):
+    if ref is None:
+        ref = datetime.now()
+    days = 0 - ref.weekday()
+    if days <= 0:
+        days += 7
+    return ref + timedelta(days=days)
+
+
 # ============================================================
-# HAUPTPROGRAMM MIT INTERAKTIVER EINGABE
+# INTERAKTIVE EINGABE VON SONDERWÜNSCHEN
 # ============================================================
 
-EMPLOYEE_NAMES = [
+EMPLOYEE_LIST = [
     "Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
     "Isaura", "Martina", "Alessia", "Amra", "Nina",
     "Jesika", "Brigitte", "Florence", "Corinne", "Saskia",
     "Dragi", "Maria B.", "Andrea A."
 ]
 
-DAY_NAMES_SHORT = ["Mo", "Di", "Mi", "Do", "Fr"]
-
-def print_employee_list():
+def print_employees():
     print("\n  Mitarbeiterinnen:")
-    for i, name in enumerate(EMPLOYEE_NAMES, 1):
+    for i, name in enumerate(EMPLOYEE_LIST, 1):
         print(f"    {i:2d}. {name}")
 
 def pick_employee():
     """Lässt den User eine Mitarbeiterin wählen."""
-    print_employee_list()
+    print_employees()
     while True:
         inp = input("\n  Nummer oder Name (Enter = fertig): ").strip()
         if not inp:
             return None
         if inp.isdigit():
             idx = int(inp) - 1
-            if 0 <= idx < len(EMPLOYEE_NAMES):
-                return EMPLOYEE_NAMES[idx]
-        # Suche nach Name (case-insensitive, Teilmatch)
-        matches = [n for n in EMPLOYEE_NAMES if inp.lower() in n.lower()]
+            if 0 <= idx < len(EMPLOYEE_LIST):
+                return EMPLOYEE_LIST[idx]
+        matches = [n for n in EMPLOYEE_LIST if inp.lower() in n.lower()]
         if len(matches) == 1:
             return matches[0]
         elif len(matches) > 1:
             print(f"    Mehrere Treffer: {', '.join(matches)}")
-            print(f"    Bitte genauer eingeben.")
         else:
-            print(f"    '{inp}' nicht gefunden. Nochmal versuchen.")
+            print(f"    '{inp}' nicht gefunden.")
 
 def pick_days():
     """Lässt den User Tage wählen."""
@@ -954,111 +953,96 @@ def pick_absence_type():
             return int(inp)
         print("    Bitte 1-4 eingeben.")
 
-
-def get_next_monday(ref_date=None):
-    """Gibt den nächsten Montag zurück."""
-    if ref_date is None:
-        ref_date = datetime.now()
-    days_ahead = 0 - ref_date.weekday()
-    if days_ahead <= 0:
-        days_ahead += 7
-    return ref_date + timedelta(days=days_ahead)
-
-
 def check_rule_impact(absences, employees):
-    """
-    Prüft welche Regeln durch Abwesenheiten verletzt werden könnten.
-    absences: list von (name, day, slot)
-    """
+    """Prüft welche Regeln durch Abwesenheiten verletzt werden könnten."""
     warnings = []
-    absent_set = set(absences)
-
+    
     for name, day, slot in absences:
         day_name = DAYS[day]
         slot_name = SLOTS[slot]
         tag = f"{name} {day_name} {slot_name}"
-
+        
         # Brigitte Mo ERF9
         if name == "Brigitte" and day == 0:
-            warnings.append(f"⚠️  {tag}: Brigitte hat normalerweise ERF9 am Montag! → ERF9 Mo muss neu besetzt werden.")
-
+            warnings.append(f"⚠️  {tag}: Brigitte hat normalerweise ERF9 am Montag!")
+        
         # Dragi Di ERF9
         if name == "Dragi" and day == 1:
-            warnings.append(f"⚠️  {tag}: Dragi hat normalerweise ERF9 am Dienstag! → ERF9 Di muss neu besetzt werden.")
-
-        # Dipiga KGS
+            warnings.append(f"⚠️  {tag}: Dragi hat normalerweise ERF9 am Dienstag!")
+        
+        # Dipiga TAGES PA / KGS
         if name == "Dipiga" and day == 1 and slot == 0:
-            warnings.append(f"⚠️  {tag}: Dipiga hat KGS am Dienstag Vormittag! → KGS fällt aus oder muss vertreten werden.")
+            warnings.append(f"⚠️  {tag}: Dipiga hat TAGES PA am Dienstag VM!")
         if name == "Dipiga" and day == 3 and slot == 1:
-            warnings.append(f"⚠️  {tag}: Dipiga hat KGS am Donnerstag Nachmittag! → KGS fällt aus oder muss vertreten werden.")
-
+            warnings.append(f"⚠️  {tag}: Dipiga hat KGS am Donnerstag NM!")
+        
         # Martina KSC Spez.
         if name == "Martina" and day in [1, 3] and slot == 0:
-            warnings.append(f"⚠️  {tag}: Martina hat KSC Spez. am {day_name} VM! → KSC Spez. fällt aus.")
-
+            warnings.append(f"⚠️  {tag}: Martina hat KSC Spez. am {day_name} VM!")
+        
         # Florence PO Di
         if name == "Florence" and day == 1:
-            warnings.append(f"⚠️  {tag}: Florence hat normalerweise PO am Dienstag.")
-
+            warnings.append(f"⚠️  {tag}: Florence hat normalerweise PO am Dienstag!")
+        
         # Maria B. HO Mo
         if name == "Maria B." and day == 0 and slot == 0:
-            warnings.append(f"⚠️  {tag}: Maria B. hat normalerweise HO am Montag VM.")
-
-        # Labor Mi NM
+            warnings.append(f"⚠️  {tag}: Maria B. hat normalerweise HO am Montag VM!")
+        
+        # ERF5 Mi NM
         if name in ["Jesika", "Dipiga"] and day == 2 and slot == 1:
-            warnings.append(f"⚠️  {tag}: {name} könnte Labor am Mi NM haben! → Labor evtl. nicht besetzt.")
-
-    # Zähle verfügbare Personen pro Slot um TEL/ABKL Engpässe zu finden
+            warnings.append(f"⚠️  {tag}: {name} könnte ERF5 (Labor) am Mi NM haben!")
+    
+    # Prüfe Mindestbesetzung
     for day in range(5):
         for slot in range(2):
             absent_count = sum(1 for n, d, s in absences if d == day and s == slot)
-            available_count = sum(1 for n in employees
+            available_count = sum(1 for n in employees 
                                  if employees[n].is_available(day, slot)) - absent_count
             target_tel = 4 if (day == 0 and slot == 0) else 3
             min_needed = target_tel + 2  # TEL + ABKL
             if available_count < min_needed:
                 warnings.append(
-                    f"🔴 {DAYS[day]} {SLOTS[slot]}: Nur noch {available_count} Personen verfügbar! "
-                    f"Brauche mind. {min_needed} (TEL:{target_tel} + ABKL:2). "
-                    f"REGELN KÖNNEN NICHT EINGEHALTEN WERDEN!"
+                    f"🔴 {DAYS[day]} {SLOTS[slot]}: Nur {available_count} Personen verfügbar! "
+                    f"Brauche mind. {min_needed} (TEL:{target_tel} + ABKL:2)!"
                 )
             elif available_count < min_needed + 3:
                 warnings.append(
-                    f"🟡 {DAYS[day]} {SLOTS[slot]}: Nur {available_count} Personen verfügbar. "
-                    f"Eng, aber machbar."
+                    f"🟡 {DAYS[day]} {SLOTS[slot]}: Nur {available_count} Personen verfügbar - eng!"
                 )
-
+    
     return warnings
-
 
 def interactive_input(week_number):
     """Interaktive Eingabe von Abwesenheiten und Sonderwünschen."""
     employees = create_employees(week_number)
     overrides = {}
     absences = []
-
+    
     print("\n" + "─" * 60)
     print("  SONDERWÜNSCHE / ABWESENHEITEN EINGEBEN")
     print("─" * 60)
     print("  Hier kannst du Krankmeldungen, Termine, Ferien etc. eingeben.")
     print("  Am Ende prüft das Programm welche Regeln betroffen sind.")
-
+    
+    entry_count = 0
+    
     while True:
         print("\n" + "─" * 40)
-        ans = input("\n  Gibt es eine Abwesenheit oder einen Sonderwunsch? (j/n): ").strip().lower()
+        if entry_count == 0:
+            prompt = "  Gibt es eine Abwesenheit oder einen Sonderwunsch? (j/n): "
+        else:
+            prompt = "  Noch eine Abwesenheit oder ein Sonderwunsch? (j/n): "
+        ans = input(prompt).strip().lower()
         if ans not in ["j", "ja", "y", "yes"]:
             break
-
-        # Mitarbeiterin wählen
+        
         name = pick_employee()
         if not name:
             break
-
-        # Typ wählen
+        
         typ = pick_absence_type()
-
+        
         if typ in [1, 2]:
-            # Krank / Ferien → ganze Tage
             label = "KRANK" if typ == 1 else "FERIEN"
             days = pick_days()
             for day in days:
@@ -1068,9 +1052,9 @@ def interactive_input(week_number):
                         absences.append((name, day, slot))
             day_str = ", ".join(DAYS[d] for d in days)
             print(f"\n  ✓ {name} → {label} am {day_str}")
-
+            entry_count += 1
+        
         elif typ == 3:
-            # Arzttermin → bestimmter Halbtag
             days = pick_days()
             slots = pick_slots()
             notiz = input("  Notiz (z.B. 'Arzttermin 14:30', Enter=leer): ").strip()
@@ -1079,14 +1063,15 @@ def interactive_input(week_number):
             for day in days:
                 for slot in slots:
                     if employees[name].is_available(day, slot):
+                        # Termin = Person abwesend für diesen Slot
                         overrides[(name, day, slot)] = f"*{notiz}"
                         absences.append((name, day, slot))
             day_str = ", ".join(DAYS[d] for d in days)
             slot_str = "+".join(SLOTS[s] for s in slots)
             print(f"\n  ✓ {name} → {notiz} am {day_str} ({slot_str})")
-
+            entry_count += 1
+        
         elif typ == 4:
-            # Sonderwunsch → bestimmte Aufgabe
             days = pick_days()
             slots = pick_slots()
             print(f"\n  Welche Aufgabe? (z.B. HO, TEL, ERF7, ABKL, etc.)")
@@ -1100,7 +1085,8 @@ def interactive_input(week_number):
             day_str = ", ".join(DAYS[d] for d in days)
             slot_str = "+".join(SLOTS[s] for s in slots)
             print(f"\n  ✓ {name} → {task} am {day_str} ({slot_str})")
-
+            entry_count += 1
+    
     # Zusammenfassung
     if overrides:
         print("\n" + "═" * 60)
@@ -1108,8 +1094,7 @@ def interactive_input(week_number):
         print("═" * 60)
         for (name, day, slot), task in overrides.items():
             print(f"  • {name:15s}  {DAYS[day]:12s} {SLOTS[slot]:12s}  →  {task}")
-
-        # Regel-Impact prüfen
+        
         if absences:
             warnings = check_rule_impact(absences, employees)
             if warnings:
@@ -1121,90 +1106,69 @@ def interactive_input(week_number):
                 print()
                 ans = input("  Trotzdem weiterfahren? (j/n): ").strip().lower()
                 if ans not in ["j", "ja", "y", "yes"]:
-                    print("  Abgebrochen. Bitte Eingaben anpassen und erneut starten.")
+                    print("  Abgebrochen.")
                     return None
             else:
                 print("\n  ✅ Keine kritischen Regel-Auswirkungen erkannt.")
     else:
-        print("\n  Keine Sonderwünsche eingegeben → normaler Plan wird generiert.")
-
+        print("\n  Keine Sonderwünsche → normaler Plan wird generiert.")
+    
     return overrides
-
-
-def validate_result(sched):
-    """Prüft die wichtigsten Regeln und zeigt Warnungen."""
-    issues = []
-    for day in range(5):
-        for slot in range(2):
-            target_tel = 4 if (day == 0 and slot == 0) else 3
-            tel_c = sched.tel_count[day][slot]
-            abkl_c = sched.abkl_count[day][slot]
-            if tel_c < target_tel:
-                issues.append(f"❌ {DAYS[day]} {SLOTS[slot]}: TEL nur {tel_c}/{target_tel}")
-            if abkl_c < 2:
-                issues.append(f"❌ {DAYS[day]} {SLOTS[slot]}: ABKL nur {abkl_c}/2")
-
-    # ERF8 pro Tag
-    employees = sched.employees
-    for day in range(5):
-        has_erf8 = any("ERF8" in sched.get_task(n, day, s)
-                       for n in employees for s in range(2))
-        if not has_erf8:
-            issues.append(f"❌ {DAYS[day]}: Kein ERF8 besetzt!")
-
-    return issues
 
 
 def main():
     print()
     print("╔══════════════════════════════════════════════════════════╗")
-    print("║         ARBEITSKALENDER-GENERATOR                      ║")
-    print("║         KSC Team - Wöchentlicher Arbeitsplan            ║")
+    print("║         ARBEITSKALENDER-GENERATOR v5.1                  ║")
+    print("║         Mit interaktiver Sonderwunsch-Eingabe           ║")
     print("╚══════════════════════════════════════════════════════════╝")
-
-    # Datum bestimmen
-    next_monday = get_next_monday()
-    week_number = next_monday.isocalendar()[1]
-    end_friday = next_monday + timedelta(days=4)
-
-    print(f"\n  Woche:  KW {week_number}")
-    print(f"  Von:    {next_monday.strftime('%d.%m.%Y')} (Montag)")
-    print(f"  Bis:    {end_friday.strftime('%d.%m.%Y')} (Freitag)")
-
+    
+    monday = get_next_monday()
+    kw = monday.isocalendar()[1]
+    friday = monday + timedelta(days=4)
+    
+    print(f"\n  Woche:  KW {kw}")
+    print(f"  Von:    {monday.strftime('%d.%m.%Y')} (Montag)")
+    print(f"  Bis:    {friday.strftime('%d.%m.%Y')} (Freitag)")
+    
+    # 2-Wochen Info anzeigen
+    is_even = kw % 2 == 0
+    print(f"\n  2-Wochen-Status (KW {kw} = {'gerade' if is_even else 'ungerade'}):")
+    if is_even:
+        print("    • Linda: Freitag FREI")
+        print("    • Isaura: Mittwoch FREI")
+        print("    • Corinne: Freitag FREI")
+    else:
+        print("    • Linda, Isaura, Corinne: normal verfügbar")
+    
     # Interaktive Eingabe
-    overrides = interactive_input(week_number)
+    overrides = interactive_input(kw)
     if overrides is None:
-        return
-
-    # Schedule generieren
+        return None
+    
     print("\n  Generiere Arbeitsplan...")
-    random.seed(week_number)
-
-    sched = build_schedule(week_number, next_monday, overrides)
-
-    # Regel-Validierung nach Generierung
-    issues = validate_result(sched)
-
-    # Excel schreiben
-    filename = f"Arbeitsplan_KW{week_number}_{next_monday.strftime('%Y%m%d')}.xlsx"
-    output_path = write_excel(sched, filename)
-
+    random.seed(kw)
+    
+    sched = build_schedule(kw, monday, overrides)
+    issues = validate_schedule(sched)
+    
+    filename = f"Arbeitsplan_KW{kw}_{monday.strftime('%Y%m%d')}.xlsx"
+    write_excel(sched, filename)
+    
     # Ergebnis
     print(f"\n{'═' * 60}")
     print(f"  ERGEBNIS")
     print(f"{'═' * 60}")
-
+    
     if issues:
-        print(f"\n  ⚠️  ACHTUNG - Folgende Regeln konnten nicht eingehalten werden:")
+        print(f"\n  ⚠️ ACHTUNG - Folgende Regeln konnten nicht eingehalten werden:")
         for issue in issues:
             print(f"    {issue}")
-        print(f"\n  Grund: Vermutlich zu wenige Personen verfügbar.")
-        print(f"  → Prüfe ob zusätzliche Abwesenheiten angepasst werden können.")
     else:
         print(f"\n  ✅ Alle Regeln eingehalten!")
-
+    
     print(f"\n  📄 Datei erstellt: {filename}")
-
+    
     # Zusammenfassung
     print(f"\n{'─' * 60}")
     print(f"  BESETZUNG:")
@@ -1219,11 +1183,20 @@ def main():
             print(f"  {DAYS[day]:12s} {SLOTS[slot]:12s}  "
                   f"TEL: {tel_c}/{target_tel} {tel_sym}  "
                   f"ABKL: {abkl_c}/2 {abkl_sym}")
-
+    
+    print(f"\n  Wochenaufgaben:")
+    print(f"    Direkt: {sched.wochenaufgabe_direkt}")
+    print(f"    ONB:    {sched.wochenaufgabe_onb}")
+    print(f"    BTM:    {sched.wochenaufgabe_btm}")
+    
+    print(f"\n  Tagesverantwortung:")
+    for d in range(5):
+        print(f"    {DAYS[d]}: {sched.tagesverantwortung.get(d, '?')}")
+    
     print(f"\n{'═' * 60}")
     print(f"  Fertig!")
     print(f"{'═' * 60}\n")
-
+    
     return filename
 
 
