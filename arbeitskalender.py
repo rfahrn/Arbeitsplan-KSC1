@@ -47,18 +47,15 @@ TASK_COLORS = {
     "PO/ABKL":   "FFC000",
     "PO/TEL":    "92D050",
     "PO/SCAN":   "D6DCE4",  # Grau - PÖ + Scan (morgens)
-    "Scan":      "D6DCE4",  # Grau - nur Scannen (nachmittags)
-    "SCAN":      "D6DCE4",
+    "SCAN":      "D6DCE4",  # Grau - nur Scannen (nachmittags)
     "HO":        "BDD7EE",  # Hellblau
     "HO/Q":      "BDD7EE",
     "VBZ/Q":     "C5E0B4",  # Lindgrün
     "KSC Spez.": "FFFF00",  # Gelb
-    "TAGES PA":  "00FFFF",  # Cyan
     "TAGESPA":   "00FFFF",
     "RX Abo":    "D9D9D9",  # Grau
     "Access":    "FF00FF",  # Magenta
     "KSV":       "00FFFF",
-    "scanning":  "E2EFDA",
     "Krankheit": "FF9999",
     "KRANK":     "FF9999",
     "Feiertag":  "FF0000",
