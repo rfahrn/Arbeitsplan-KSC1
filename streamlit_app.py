@@ -25,9 +25,12 @@ import pandas as pd
 import streamlit as st
 
 # ── Kern-Logik importieren ────────────────────────────────────────────
+# Reihenfolge wichtig: BASE_DIR muss in sys.path VOR dem Legacy-App-Dir
+# stehen, sonst importiert Python die veraltete Kopie in
+# ksc_arbeitsplan/app/arbeitskalender.py.
 BASE_DIR = Path(__file__).resolve().parent
 APP_DIR = BASE_DIR / "ksc_arbeitsplan" / "app"
-for p in (str(BASE_DIR), str(APP_DIR)):
+for p in (str(APP_DIR), str(BASE_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
