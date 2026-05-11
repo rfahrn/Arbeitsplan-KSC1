@@ -626,8 +626,10 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # ════════════════════════════════════════════════════════════
     # Restliche freie Slots auffüllen
     #   TLs            → ERF7/Q (Queue)
-    #   andere VM      → PO     (PÖ ist nur morgens, also default = PÖ)
-    #   andere NM      → ERF7   (keine PÖ-/Scan-Mehrfachzuweisung NM)
+    #   alle anderen   → ERF7
+    # WICHTIG: KEINE zusätzlichen "PO"-Zuweisungen mehr hier, damit
+    # VM bei genau 1 PO/SCAN + 2 PO bleibt und nicht weitere
+    # PÖ-Personen über die 2 hinaus aufgefüllt werden.
     # ════════════════════════════════════════════════════════════
 
     for name in employees:
@@ -636,8 +638,6 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 if sched.is_free(name, day, slot):
                     if employees[name].is_tl:
                         sched.assign(name, day, slot, "ERF7/Q")
-                    elif slot == 0:
-                        sched.assign(name, day, slot, "PO")
                     else:
                         sched.assign(name, day, slot, "ERF7")
     
