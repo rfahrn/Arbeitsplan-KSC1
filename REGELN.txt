@@ -20,15 +20,17 @@ arbeitskalender.py.
 • Täglich VM und NM je 2 Personen an der Abklärung
 
 ────────────────────────────────────────────────────────────────────────
-3) SCHALTER (ERF4/SCH)
+3) SCHALTER (ERF7/SCH)
 ────────────────────────────────────────────────────────────────────────
-• 1 Person pro Tag, GANZER Tag (VM + NM dieselbe Person)
-• Rotation: alle 2 Wochen pro Person
-• Ausgenommen vom Schalter:
-    Linda, Florence, Corinne, Maria B., Andrea A.,
+• Immer 1 Person am Schalter, HALBTAGS
+• 1 Person VM + 1 ANDERE Person NM pro Werktag
+• Aufgabe wird mit ERF7 kombiniert → Task-Code "ERF7/SCH"
+• Rotation: jede Person ca. alle 2 Wochen am Schalter
+• Nie Schalter:
+    Linda, Florence, Corinne, Maria B., Andrea A.
+• Nicht strikt alle 2 Wochen (seltener im Pool):
     Brigitte, Saskia, Dragi
-• ERF4/SCH kann mit anderen ERF-Aufgaben kombiniert werden
-  (z. B. ERF4/Access)
+• Beispiel: VM Lara → ERF7/SCH, NM Nina → ERF7/SCH
 
 ────────────────────────────────────────────────────────────────────────
 4) PO / SCANNING
