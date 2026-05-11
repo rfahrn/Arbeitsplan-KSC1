@@ -66,15 +66,18 @@ TASK_COLORS = {    # ===== Grün =====
     "PO":         "D6DCE4",
     "PO/SCAN":    "D6DCE4",
     "SCAN":       "D6DCE4",
-    "RX Abo":     "D9D9D9",
+
+    # ===== RX Abo / Lila =====
+    "RX Abo":     "D9B8FF",
+    
+    # ===== VBZ / Türkis =====
+    "VBZ":        "4FD1C5",
+    "VBZ/Q":      "4FD1C5",
 
     # ===== HO / Hellblau =====
     "HO":         "BDD7EE",
     "HO/Q":       "BDD7EE",
 
-    # ===== VBZ / Lindgrün =====
-    "VBZ":        "C5E0B4",
-    "VBZ/Q":      "C5E0B4",
 
     # ===== Spezial =====
     "KSC Spez.":  "FFFF00",
