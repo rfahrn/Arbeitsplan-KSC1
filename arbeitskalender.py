@@ -28,7 +28,7 @@ SLOTS = ["Vormittag", "Nachmittag"]
 # Farben für Aufgaben (EXAKT wie Referenzbild)
 TASK_COLORS = {
     "KTG":       "A9D18E",  # Grün
-    "KGS":       "A9D18E",
+    "KGS":       "B4A0D6",  # Violett
     "ABKL":      "FFC000",  # Orange
     "TEL":       "92D050",  # Grün
     "ERF7":      "00B0F0",  # Blau
@@ -55,7 +55,7 @@ TASK_COLORS = {
     "KSC Spez.": "FFFF00",  # Gelb
     "TAGES PA":  "00FFFF",  # Cyan
     "TAGESPA":   "00FFFF",
-    "RX Abo":    "D9D9D9",  # Grau
+    "RX Abo":    "FFB6C1",  # Pink
     "Access":    "FF00FF",  # Magenta
     "KSV":       "00FFFF",
     "scanning":  "E2EFDA",
@@ -593,20 +593,20 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                     count += 1
     
     # ════════════════════════════════════════════════════════════
-    # ERF8 (1/Tag)
+    # ERF8 (1/Tag, STRIKT NACHMITTAG)
+    # ERF8 läuft bis 17:00 → muss NM sein.
+    # Kombinationen ERF8/Q oder ERF8/HUB können auch VM stehen,
+    # werden aber nicht automatisch vergeben (manuell editierbar).
     # ════════════════════════════════════════════════════════════
-    
+
     erf8_candidates = [n for n in employees if n not in ["Maria B.", "Saskia"]]
     random.shuffle(erf8_candidates)
-    
+
     for day in range(5):
         if sched.erf8_assigned[day]:
             continue
         for name in erf8_candidates:
-            if sched.is_free(name, day, 0):
-                sched.assign(name, day, 0, "ERF8")
-                break
-            elif sched.is_free(name, day, 1):
+            if sched.is_free(name, day, 1):  # nur Nachmittag
                 sched.assign(name, day, 1, "ERF8")
                 break
     
