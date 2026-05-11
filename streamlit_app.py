@@ -46,11 +46,6 @@ from arbeitskalender import (  # noqa: E402
     write_excel,
 )
 
-# Versions-Signatur: dient als Sichtprüfung, dass der Cloud-Worker den
-# AKTUELLEN Code aus main geladen hat. Wenn dieser String in der App
-# nicht sichtbar ist → Streamlit-Cloud Reboot nötig.
-ENGINE_VERSION = "v3 · ERF7/SCH ganztags · NM=Scan · PÖ-VM 1+2"
-ENGINE_FILE = _ak.__file__
 
 # ── Monkey-patch create_employees so user-edited team is honoured ─────
 _ORIG_CREATE_EMPLOYEES = _ak.create_employees
@@ -1000,14 +995,6 @@ def run_generation() -> None:
 # ════════════════════════════════════════════════════════════════════════
 
 info = get_week_info(st.session_state.week_offset)
-
-# Sichtbarer Versions-Banner – wenn dieser nicht zur erwarteten
-# Version passt, läuft auf Streamlit Cloud noch eine alte Kopie und
-# die App muss manuell rebootet werden ("Manage app → Reboot").
-st.caption(
-    f"Engine: {ENGINE_VERSION} · "
-    f"Datei: {Path(ENGINE_FILE).relative_to(BASE_DIR) if Path(ENGINE_FILE).is_relative_to(BASE_DIR) else ENGINE_FILE}"
-)
 
 st.markdown('<div class="topbar">', unsafe_allow_html=True)
 hcol = st.columns([2.6, 2.4, 2.6, 1.0, 1.6])
