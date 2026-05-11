@@ -148,7 +148,8 @@ TV_COLORS = {
 }
 
 # PHC-Liste = dunkelblau
-PHC_COLOR = "0070C0"
+#PHC_COLOR = "0070C0"
+PHC_COLOR = "00008B"
 
 # Berechtigungen für Wochenaufgaben
 ONB_ERLAUBT = ["Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
