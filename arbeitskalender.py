@@ -664,20 +664,20 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                     count += 1
     
     # ════════════════════════════════════════════════════════════
-    # ERF8 (1/Tag)
+    # ERF8 (1/Tag, STRIKT NACHMITTAG)
+    # ERF8 läuft bis 17:00 → muss NM sein.
+    # Kombinationen ERF8/Q oder ERF8/HUB können auch VM stehen,
+    # werden aber nicht automatisch vergeben (manuell editierbar).
     # ════════════════════════════════════════════════════════════
-    
+
     erf8_candidates = [n for n in employees if n not in ["Maria B.", "Saskia"]]
     random.shuffle(erf8_candidates)
-    
+
     for day in range(5):
         if sched.erf8_assigned[day]:
             continue
         for name in erf8_candidates:
-            if sched.is_free(name, day, 0):
-                sched.assign(name, day, 0, "ERF8")
-                break
-            elif sched.is_free(name, day, 1):
+            if sched.is_free(name, day, 1):  # nur Nachmittag
                 sched.assign(name, day, 1, "ERF8")
                 break
     

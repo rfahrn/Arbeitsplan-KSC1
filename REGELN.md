@@ -15,7 +15,7 @@
 | Tagespharm | `TAGES PA` | **1 / Tag**, ganzer Tag | ✅ | ✅ (gleiche Person) | nicht TLs, nicht Brigitte / Saskia / Dragi / Maria B. / Andrea A. / Florence | täglich, max. 1× / Person / Woche |
 | Schalter | `ERF7/SCH` | **1 / Tag**, ganzer Tag | ✅ | ✅ (gleiche Person) | siehe §3 (Schalter-Pool) | täglich; alle 2 Wochen pro Person |
 | HUB | `ERF7/HUB` | **2 / Tag** (halbtags) | ✅ (1 Person) | ✅ (andere Person) | Jesika, Dragi, Lara, Corinne, Dipiga, Nina, Amra, Alessia | täglich, VM + NM unterschiedliche Person |
-| ERF8 | `ERF8` | **1 / Tag** | ✅ oder NM | ✅ oder VM | alle ausser Maria B., Saskia | täglich, ein Halbtag |
+| ERF8 | `ERF8` | **1 / Tag** | – | ✅ **strikt NM** | alle ausser Maria B., Saskia | täglich, nur Nachmittag (läuft bis 17:00); `ERF8/Q` & `ERF8/HUB` können manuell auch VM gesetzt werden |
 | ERF9 Montag | `ERF9` | 1 ganztags | ✅ | ✅ | **Brigitte** (fix) | jeden Montag |
 | ERF9 Dienstag | `ERF9` / `ERF9/TEL` | VM = `ERF9`, NM = `ERF9/TEL` | ✅ | ✅ | **Dragi** (fix) | jeden Dienstag |
 | ERF9 Mi–Fr | `ERF9` | 1 (VM) | ✅ | – | alle ausser Brigitte, Dragi | Mi / Do / Fr, undefiniert |
