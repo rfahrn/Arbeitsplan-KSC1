@@ -1,0 +1,173 @@
+════════════════════════════════════════════════════════════════════════
+REGELN ARBEITSPLAN KSC1
+════════════════════════════════════════════════════════════════════════
+Konsolidierte Übersicht aller Planungsregeln. Diese Datei beschreibt das
+Sollverhalten des Generators in ksc_arbeitsplan / streamlit_app.py +
+arbeitskalender.py.
+
+────────────────────────────────────────────────────────────────────────
+1) TELEFON (TEL)
+────────────────────────────────────────────────────────────────────────
+• Montag VM:                4 Personen am Telefon
+• alle anderen Halbtage:    3 Personen am Telefon
+• TLs werden bevorzugt eingeplant, max. 2 TEL-Slots pro TL pro Woche
+• TL wechseln sich 1–2× pro Woche am Tel ab
+• TPA: NM-Tel möglich (undefiniert)
+
+────────────────────────────────────────────────────────────────────────
+2) ABKL
+────────────────────────────────────────────────────────────────────────
+• Täglich VM und NM je 2 Personen an der Abklärung
+
+────────────────────────────────────────────────────────────────────────
+3) SCHALTER (ERF4/SCH)
+────────────────────────────────────────────────────────────────────────
+• 1 Person pro Tag, GANZER Tag (VM + NM dieselbe Person)
+• Rotation: alle 2 Wochen pro Person
+• Ausgenommen vom Schalter:
+    Linda, Florence, Corinne, Maria B., Andrea A.,
+    Brigitte, Saskia, Dragi
+• ERF4/SCH kann mit anderen ERF-Aufgaben kombiniert werden
+  (z. B. ERF4/Access)
+
+────────────────────────────────────────────────────────────────────────
+4) PO / SCANNING
+────────────────────────────────────────────────────────────────────────
+• Vormittag pro Tag:        1 Person PO/SCAN  +  2 Personen PO
+                            (insgesamt 3 Personen "Po"-bezogen)
+• Nachmittag pro Tag:       nur 1 Person scannt (PO/SCAN)
+• "PO" kann allein laufen oder mit PO/ABKL kombiniert werden
+• Kein Scanning für:        Brigitte, Corinne, Maria B., Saskia, Dragi
+
+────────────────────────────────────────────────────────────────────────
+5) ERF7 / HUB
+────────────────────────────────────────────────────────────────────────
+• Halbtags, jeden Werktag
+• 1 Person VM, eine ANDERE Person NM
+• Berechtigt: Jesika, Dragi, Lara, Corinne, Dipiga, Nina, Amra, Alessia
+
+────────────────────────────────────────────────────────────────────────
+6) ERF8
+────────────────────────────────────────────────────────────────────────
+• 1 Person pro Tag (Vormittag bevorzugt, sonst Nachmittag)
+• Ausgenommen: Maria B., Saskia
+
+────────────────────────────────────────────────────────────────────────
+7) ERF9
+────────────────────────────────────────────────────────────────────────
+• Montag:    Brigitte S. (ganztags)
+• Dienstag:  Dragi (VM ERF9, NM ERF9/TEL)
+• Mi–Fr:     undefiniert, freie Wahl aus berechtigten Personen
+            (ausser Brigitte, Dragi)
+
+────────────────────────────────────────────────────────────────────────
+8) TAGESPHARM (TAGES PA / TPA)
+────────────────────────────────────────────────────────────────────────
+• 1 Person pro Tag, GANZER Tag (VM + NM dieselbe Person)
+• Pro Person max. 1× pro Woche (rotiert über die Woche)
+• Bevorzugt: keine TLs, keine Personen mit eingeschränkter Verfügbarkeit
+• TPA NM ggf. mit Tel-Aufgaben kombinierbar
+
+────────────────────────────────────────────────────────────────────────
+9) LABOR (ERF5)
+────────────────────────────────────────────────────────────────────────
+• Mittwoch NM
+• Jesika und Dipiga im Wochenwechsel
+
+────────────────────────────────────────────────────────────────────────
+10) KGS
+────────────────────────────────────────────────────────────────────────
+• Dipiga: Dienstag VM  und  Donnerstag NM
+
+────────────────────────────────────────────────────────────────────────
+11) KSC SPEZ.
+────────────────────────────────────────────────────────────────────────
+• Martina: Dienstag VM und Donnerstag VM
+
+────────────────────────────────────────────────────────────────────────
+12) RX ABO
+────────────────────────────────────────────────────────────────────────
+• Berechtigt: Lara, Linda, Isa, Martina
+
+────────────────────────────────────────────────────────────────────────
+13) DIREKTBESTELLUNG (Wochenaufgabe)
+────────────────────────────────────────────────────────────────────────
+• 1 Person pro Woche im Wechsel: Andrea A., Andrea G., Silvana
+
+────────────────────────────────────────────────────────────────────────
+14) VORBEZÜGE (VBZ/Q)
+────────────────────────────────────────────────────────────────────────
+• Berechtigt: Lara, Nina
+
+────────────────────────────────────────────────────────────────────────
+15) ONB (Wochenaufgabe)
+────────────────────────────────────────────────────────────────────────
+• 1 Person pro Woche im Wechsel
+• Ausgeschlossen: Brigitte, Florence, Saskia, Dragi, Maria B., Andrea A.
+
+────────────────────────────────────────────────────────────────────────
+16) QUEUE (ERF7/Q)
+────────────────────────────────────────────────────────────────────────
+• Queue läuft bei den TLs (Lara, Silvana, Linda)
+• Freie TL-Slots werden automatisch mit ERF7/Q befüllt
+
+────────────────────────────────────────────────────────────────────────
+17) TAGESVERANTWORTUNG (TV)
+────────────────────────────────────────────────────────────────────────
+• Pro Tag dieselbe Person VM + NM
+• Wechseln sich unter den TLs ab: Lara, Silvana, Linda
+• Fällt die geplante TL aus → automatischer Ersatz aus den anderen TLs
+• Wenn keine TL verfügbar → manueller Konflikt-Hinweis
+
+────────────────────────────────────────────────────────────────────────
+18) PHC-LISTE / 18-UHR-LISTE
+────────────────────────────────────────────────────────────────────────
+• Montag:        TL im Wechsel (Silvana / Linda / Lara)
+• Dienstag:      Dipiga
+• Mittwoch:      nicht definiert, freie Wahl
+• Donnerstag:    nicht definiert, freie Wahl
+• Freitag:       Corinne E. und Andrea G. im Wechsel
+• Bei Ausfall:   automatisch der Nächste aus dem Pool
+
+────────────────────────────────────────────────────────────────────────
+19) HOME OFFICE / SPEZIALITÄTEN
+────────────────────────────────────────────────────────────────────────
+• Maria B.:      Montagmorgen HO
+• Linda:         alle 2 Wochen am Dienstag HO (ganztags)
+• Florence:      Pö wenn an einem Dienstag
+
+────────────────────────────────────────────────────────────────────────
+20) ABWESENHEITEN (Krank, Ferien, Termin) – Schritt 1
+────────────────────────────────────────────────────────────────────────
+• Eingaben in Schritt 1 ("Abwesenheit oder Sonderwunsch") gelten NUR
+  für die explizit gewählten KW.
+• Standard: nur die AKTUELLE Kalenderwoche.
+• "Anzahl Wochen": N gilt für N aufeinander folgende KW
+  (ab der KW, in der eingegeben wurde).
+• Es gibt KEINE automatische Weiterverteilung auf alle Folgewochen.
+
+────────────────────────────────────────────────────────────────────────
+21) PENSEN & VERFÜGBARKEITEN
+────────────────────────────────────────────────────────────────────────
+Grossenbacher Silvana   100%
+Rexhaj Majlinda         90%   – jeden 2. Freitag frei
+Lara Ierano             100%
+Gygax Andrea            100%
+Jeyalingam Dipiga       100%
+Bohnenblust Isaura      90%   – jeden 2. Mittwoch frei
+Martina Pizzi           80%   – jeden Montag frei
+Giombanco Alessia       100%
+Imsirovic Amra          100%
+Hänni Nina              100%
+Bushaj Jesika           100%
+Siegrist Brigitte       70%   – Mi, Do, Fr Nachmittag frei
+Florence Dornbierer     70%   – Mi NM und Fr frei
+Eggimann Corinne        90%   – jeden 2. Freitag frei
+Schöni Saskia           40%   – nur Mi und Fr
+Milenkovic Dragana      60%   – nur Di, Do, Fr
+Bruzzese Maria          30%   – nur Mo und Do VM
+Ackermann Andrea        60%   – nur Mo, Di, Mi
+
+════════════════════════════════════════════════════════════════════════
+ENDE
+════════════════════════════════════════════════════════════════════════

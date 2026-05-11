@@ -824,6 +824,7 @@ st.session_state.setdefault("sel_days", set())
 st.session_state.setdefault("sel_slot", "Ganzer Tag")
 st.session_state.setdefault("f_type", "Krank")
 st.session_state.setdefault("f_note", "")
+st.session_state.setdefault("f_weeks", 1)
 
 
 def _init_team() -> None:
@@ -884,6 +885,12 @@ def run_generation() -> None:
 
     for entry in st.session_state.entries:
         if entry["name"] not in employees:
+            continue
+        # Only apply the entry to the configured consecutive week range.
+        # Legacy entries without kw_start fall back to "current week only".
+        kw_start = entry.get("kw_start", kw)
+        weeks = max(1, int(entry.get("weeks", 1)))
+        if not (kw_start <= kw < kw_start + weeks):
             continue
         task_code = ABSENCE_TYPES.get(entry["type"], "CUSTOM")
         note = (entry.get("note") or "").strip()
@@ -1317,6 +1324,19 @@ def render_planung() -> None:
                         st.session_state.sel_days.add(i)
                     st.rerun()
 
+        # Anzahl Wochen (consecutive) — defaults to 1
+        st.markdown(
+            '<div class="field-label" style="margin-top:10px;">Anzahl '
+            'Wochen <span style="font-weight:500; text-transform:none; '
+            'letter-spacing:0; color:var(--text-mute);">aufeinander '
+            'folgend, ab dieser KW</span></div>',
+            unsafe_allow_html=True,
+        )
+        st.number_input(
+            "Anzahl Wochen", min_value=1, max_value=52, step=1,
+            key="f_weeks", label_visibility="collapsed",
+        )
+
         # Alle / Keine / Hinzufügen on row 2
         a_cols = st.columns([1, 1, 4, 2])
         with a_cols[0]:
@@ -1343,6 +1363,8 @@ def render_planung() -> None:
                     task = note if (f_type == "Custom" and note) else (
                         "HO" if f_type == "Custom" else ""
                     )
+                    cur_kw = get_week_info(st.session_state.week_offset)["kw"]
+                    weeks_n = max(1, int(st.session_state.f_weeks or 1))
                     st.session_state.entries.append({
                         "name": st.session_state.f_employee,
                         "type": f_type,
@@ -1350,6 +1372,8 @@ def render_planung() -> None:
                         "slots": slots,
                         "note": note,
                         "task": task,
+                        "kw_start": cur_kw,
+                        "weeks": weeks_n,
                     })
                     # Pending-clear pattern: Streamlit forbids mutating a
                     # widget-bound key after it was instantiated this run.
@@ -1387,6 +1411,7 @@ def render_planung() -> None:
                 unsafe_allow_html=True,
             )
         else:
+            cur_kw = info["kw"]
             for idx, e in enumerate(st.session_state.entries):
                 type_key = type_to_key(e["type"])
                 days_str = ", ".join(DAY_SHORTS[d] for d in e["days"])
@@ -1399,14 +1424,23 @@ def render_planung() -> None:
                     f'<span class="entry-note">· „{html_escape(e["note"])}"</span>'
                     if e["note"] else ""
                 )
+                kw_start = e.get("kw_start", cur_kw)
+                weeks_n = max(1, int(e.get("weeks", 1)))
+                kw_end = kw_start + weeks_n - 1
+                if weeks_n == 1:
+                    kw_str = f"KW {kw_start}"
+                else:
+                    kw_str = f"KW {kw_start}–{kw_end}"
+                is_active = kw_start <= cur_kw <= kw_end
+                opacity = "" if is_active else 'style="opacity:0.45;"'
                 erow_l, erow_r = st.columns([12, 1])
                 with erow_l:
                     st.markdown(
                         f"""
-                        <div class="entry-row">
+                        <div class="entry-row" {opacity}>
                           <span class="entry-dot {type_key}"></span>
                           <span class="entry-name">{html_escape(e['name'])}</span>
-                          <span class="entry-meta">· {html_escape(e['type'])} · {days_str} ({slot_str})</span>
+                          <span class="entry-meta">· {html_escape(e['type'])} · {days_str} ({slot_str}) · {kw_str}</span>
                           {note_html}
                         </div>
                         """,
