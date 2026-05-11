@@ -1001,14 +1001,6 @@ def run_generation() -> None:
 
 info = get_week_info(st.session_state.week_offset)
 
-# Sichtbarer Versions-Banner – wenn dieser nicht zur erwarteten
-# Version passt, läuft auf Streamlit Cloud noch eine alte Kopie und
-# die App muss manuell rebootet werden ("Manage app → Reboot").
-st.caption(
-    f"Engine: {ENGINE_VERSION} · "
-    f"Datei: {Path(ENGINE_FILE).relative_to(BASE_DIR) if Path(ENGINE_FILE).is_relative_to(BASE_DIR) else ENGINE_FILE}"
-)
-
 st.markdown('<div class="topbar">', unsafe_allow_html=True)
 hcol = st.columns([2.6, 2.4, 2.6, 1.0, 1.6])
 
