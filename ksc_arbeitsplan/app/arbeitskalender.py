@@ -26,47 +26,117 @@ DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
 SLOTS = ["Vormittag", "Nachmittag"]
 
 # Farben für Aufgaben (EXAKT wie Referenzbild)
-TASK_COLORS = {
-    "KTG":       "A9D18E",  # Grün
-    "KGS":       "B4A0D6",  # Violett
-    "ABKL":      "FFC000",  # Orange
-    "TEL":       "92D050",  # Grün
-    "ERF7":      "00B0F0",  # Blau
-    "ERF7/Q":    "00B0F0",
-    "ERF7/HUB":  "00B0F0",
-    "ERF8":      "FF6600",  # Dunkelorange
-    "ERF8/Q":    "FF6600",
-    "ERF8/HUB":  "FF6600",
-    "ERF9":      "FF0000",  # Rot
-    "ERF9/Q":    "FF0000",
-    "ERF9/TEL":  "FF0000",
-    "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter (legacy)
-    "ERF7/SCH":  "C6EFCE",  # Hellgrün - Schalter (kombiniert mit ERF7)
-    "ERF5":      "F4B084",  # Hellorange - Labor
-    "PO":        "D6DCE4",  # Grau - PÖ (Postöffnung) ohne Scan
-    "PO/ABKL":   "FFC000",
-    "PO/TEL":    "92D050",
-    "PO/SCAN":   "D6DCE4",  # Grau - PÖ + Scan (morgens)
-    "Scan":      "D6DCE4",  # Grau - nur Scannen (nachmittags)
-    "SCAN":      "D6DCE4",
-    "HO":        "BDD7EE",  # Hellblau
-    "HO/Q":      "BDD7EE",
-    "VBZ/Q":     "C5E0B4",  # Lindgrün
-    "KSC Spez.": "FFFF00",  # Gelb
-    "TAGES PA":  "00FFFF",  # Cyan
-    "TAGESPA":   "00FFFF",
-    "RX Abo":    "FFB6C1",  # Pink
-    "Access":    "FF00FF",  # Magenta
-    "KSV":       "00FFFF",
-    "scanning":  "E2EFDA",
-    "Krankheit": "FF9999",
-    "KRANK":     "FF9999",
-    "Feiertag":  "FF0000",
-    "FERIEN":    "F2F2F2",
-    "TEL-16:30": "92D050",
-    "TEL 16:00": "92D050",
-    "ERF4/Access": "C6EFCE",
-    "":          "FFFFFF",
+TASK_COLORS = {    # ===== Grün =====
+    "KTG":        "A9D18E",
+    "KGS":        "A9D18E",
+
+    # ===== Orange =====
+    "ABKL":       "FFC000",
+    "PO/ABKL":    "FFC000",
+    # ===== Telefon / Grün =====
+    "TEL":        "92D050",
+    "PO/TEL":     "92D050",
+    "TEL-16:30":  "92D050",
+    "TEL 16:00":  "92D050",
+
+    # ===== ERF7 / Blau =====
+    "ERF7":       "00B0F0",
+    "ERF7/Q":     "00B0F0",
+    "ERF7/HUB":   "00B0F0",
+
+    # ===== ERF8 / Dunkelorange =====
+    "ERF8":       "FF6600",
+    "ERF8/Q":     "FF6600",
+    "ERF8/HUB":   "FF6600",
+
+    # ===== ERF9 / Rot =====
+    "ERF9":       "FF0000",
+    "ERF9/Q":     "FF0000",
+    "ERF9/TEL":   "FF0000",
+
+    # ===== Schalter / Hellgrün =====
+    "ERF4/SCH":   "C6EFCE",
+    "ERF7/SCH":   "C6EFCE",
+    "ERF4/Access":"C6EFCE",
+
+    # ===== Labor / Hellorange =====
+    "ERF5":       "F4B084",
+
+    # ===== Post / Scan / Grau =====
+    "PO":         "D6DCE4",
+    "PO/SCAN":    "D6DCE4",
+    "SCAN":       "D6DCE4",
+
+    # ===== RX Abo / Lila =====
+    "RX Abo":     "D9B8FF",
+    
+    # ===== VBZ / Türkis =====
+    "VBZ":        "4FD1C5",
+    "VBZ/Q":      "4FD1C5",
+
+    # ===== HO / Hellblau =====
+    "HO":         "BDD7EE",
+    "HO/Q":       "BDD7EE",
+
+
+    # ===== Spezial =====
+    "KSC Spez.":  "FFFF00",
+    "TAGESPA":    "00FFFF",
+    "KSV":        "00FFFF",
+
+    # ===== Access / Magenta =====
+    "Access":     "FF00FF",
+
+    # ===== Abwesenheiten =====
+    "Krankheit":  "FF9999",
+    "KRANK":      "FF9999",
+    "Feiertag":   "FF0000",
+    "FERIEN":     "F2F2F2",
+
+    # ===== Leer =====
+    "":           "FFFFFF",
+    
+    
+    #"TEL":       "92D050",  # Grün
+    #"ERF7":      "00B0F0",  # Blau
+    #"ERF7/Q":    "00B0F0",
+    #"ERF7/HUB":  "00B0F0",
+    # "ERF8":      "FF6600",  # Dunkelorange
+    # "ERF8/Q":    "FF6600",
+    # "ERF8/HUB":  "FF6600",
+
+    # "ERF9":      "FF0000",  # Rot
+    # "ERF9/Q":    "FF0000",
+    # "ERF9/TEL":  "FF0000",
+
+    # "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter (legacy)
+    # "ERF7/SCH":  "C6EFCE",  # Hellgrün - Schalter (kombiniert mit ERF7)
+
+    # "ERF5":      "F4B084",  # Hellorange - Labor
+
+    # "PO":        "D6DCE4",  # Grau - PÖ (Postöffnung) ohne Scan
+    # "PO/ABKL":   "FFC000",
+    # "PO/TEL":    "92D050",
+    # "PO/SCAN":   "D6DCE4",  # Grau - PÖ + Scan (morgens)
+    # "SCAN":      "D6DCE4",  # Grau - nur Scannen (nachmittags)
+
+    # "HO":        "BDD7EE",  # Hellblau
+    # "HO/Q":      "BDD7EE",
+
+    # "VBZ/Q":     "C5E0B4",  # Lindgrün
+    # "KSC Spez.": "FFFF00",  # Gelb
+    # "TAGESPA":   "00FFFF",
+    # "RX Abo":    "D9D9D9",  # Grau
+    # "Access":    "FF00FF",  # Magenta
+    # "KSV":       "00FFFF",
+    # "Krankheit": "FF9999",
+    # "KRANK":     "FF9999",
+    # "Feiertag":  "FF0000",
+    # "FERIEN":    "F2F2F2",
+    # "TEL-16:30": "92D050",
+    # "TEL 16:00": "92D050",
+    # "ERF4/Access": "C6EFCE",
+    # "":          "FFFFFF",
 }
 
 # Tagesverantwortung-Farben (für Header UND Legende)
@@ -78,7 +148,8 @@ TV_COLORS = {
 }
 
 # PHC-Liste = dunkelblau
-PHC_COLOR = "0070C0"
+#PHC_COLOR = "0070C0"
+PHC_COLOR = "00008B"
 
 # Berechtigungen für Wochenaufgaben
 ONB_ERLAUBT = ["Silvana", "Linda", "Lara", "Andrea G.", "Dipiga",
@@ -543,7 +614,7 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
         _pick_one(day, 0, "PO/SCAN", exclude_scanning=True)
         _pick_n_po(day, 0, 2)
         # Nachmittag: nur 1 Scan (kein PÖ)
-        _pick_one(day, 1, "Scan", exclude_scanning=True)
+        _pick_one(day, 1, "SCAN", exclude_scanning=True)
 
     # ════════════════════════════════════════════════════════════
     # TEL (4 Mo VM, sonst 3)

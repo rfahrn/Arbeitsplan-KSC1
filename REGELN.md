@@ -21,7 +21,7 @@
 | ERF9 Mi–Fr | `ERF9` | 1 (VM) | ✅ | – | alle ausser Brigitte, Dragi | Mi / Do / Fr, undefiniert |
 | Postöffnung (PÖ + Scan) | `PO/SCAN` | **1 / Vormittag** | ✅ | – | nicht TLs, nicht Brigitte / Corinne / Maria B. / Saskia / Dragi | jeden Werktag VM |
 | Postöffnung (nur PÖ) | `PO` | **2 / Vormittag** | ✅ | – | nicht TLs | jeden Werktag VM |
-| Scanning Nachmittag | `Scan` | **1 / Nachmittag** | – | ✅ | nicht TLs, nicht Brigitte / Corinne / Maria B. / Saskia / Dragi | jeden Werktag NM |
+| Scanning Nachmittag | `SCAN` | **1 / Nachmittag** | – | ✅ | nicht TLs, nicht Brigitte / Corinne / Maria B. / Saskia / Dragi | jeden Werktag NM |
 | Queue | `ERF7/Q` | **1 / Tag** (implizit über TL-Auffüllung) | ✅ | ✅ | TLs (Silvana, Linda, Lara) | TLs decken Queue ab |
 | Tagesverantwortung | (Header) | 1 / Tag (VM + NM gleiche Person) | ✅ | ✅ | TLs (Silvana, Linda, Lara) im Wechsel | täglich, gleiche Person ganzer Tag |
 
@@ -61,7 +61,7 @@
 
 | Liste | Personen | Bedeutung |
 |---|---|---|
-| Kein Scanning | Brigitte, Corinne, Maria B., Saskia, Dragi | Bekommen weder `PO/SCAN` noch `Scan` zugewiesen |
+| Kein Scanning | Brigitte, Corinne, Maria B., Saskia, Dragi | Bekommen weder `PO/SCAN` noch `SCAN` zugewiesen |
 | Keine ONB | Brigitte, Florence, Saskia, Dragi, Maria B., Andrea A. | Nicht für die ONB-Wochenaufgabe |
 | Nicht TL | (alle ausser Silvana, Linda, Lara) | Bekommen kein `ERF7/Q` als Default-Auffüllung |
 

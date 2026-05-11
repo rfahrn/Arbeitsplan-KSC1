@@ -614,7 +614,7 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
         _pick_one(day, 0, "PO/SCAN", exclude_scanning=True)
         _pick_n_po(day, 0, 2)
         # Nachmittag: nur 1 Scan (kein PÖ)
-        _pick_one(day, 1, "Scan", exclude_scanning=True)
+        _pick_one(day, 1, "SCAN", exclude_scanning=True)
 
     # ════════════════════════════════════════════════════════════
     # TEL (4 Mo VM, sonst 3)

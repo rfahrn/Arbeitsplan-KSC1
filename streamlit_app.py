@@ -178,7 +178,7 @@ TASK_OPTIONS = [
     "ERF8", "ERF8/Q", "ERF8/HUB",
     "ERF9", "ERF9/Q", "ERF9/TEL",
     "ERF4/SCH", "ERF7/SCH", "ERF5",
-    "PO", "PO/Q", "PO/SCAN", "PO/ABKL", "PO/TEL", "Scan",
+    "PO", "PO/Q", "PO/SCAN", "PO/ABKL", "PO/TEL", "SCAN",
     "HO", "HO/Q",
     "KGS", "KTG",
     "KSC Spez.", "TAGES PA",
