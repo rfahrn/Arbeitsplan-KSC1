@@ -46,11 +46,6 @@ from arbeitskalender import (  # noqa: E402
     write_excel,
 )
 
-# Versions-Signatur: dient als Sichtprüfung, dass der Cloud-Worker den
-# AKTUELLEN Code aus main geladen hat. Wenn dieser String in der App
-# nicht sichtbar ist → Streamlit-Cloud Reboot nötig.
-ENGINE_VERSION = "v3 · ERF7/SCH ganztags · NM=Scan · PÖ-VM 1+2"
-ENGINE_FILE = _ak.__file__
 
 # ── Monkey-patch create_employees so user-edited team is honoured ─────
 _ORIG_CREATE_EMPLOYEES = _ak.create_employees
