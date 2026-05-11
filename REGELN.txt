@@ -33,13 +33,19 @@ arbeitskalender.py.
 • Beispiel: VM Lara → ERF7/SCH, NM Nina → ERF7/SCH
 
 ────────────────────────────────────────────────────────────────────────
-4) PO / SCANNING
+4) PÖ (POSTÖFFNUNG) / SCANNING
 ────────────────────────────────────────────────────────────────────────
-• Vormittag pro Tag:        1 Person PO/SCAN  +  2 Personen PO
-                            (insgesamt 3 Personen "Po"-bezogen)
-• Nachmittag pro Tag:       nur 1 Person scannt (PO/SCAN)
-• "PO" kann allein laufen oder mit PO/ABKL kombiniert werden
-• Kein Scanning für:        Brigitte, Corinne, Maria B., Saskia, Dragi
+• Vormittag (PÖ) pro Tag:   3 Personen für die Postöffnung
+                              · 1 Person  →  PO/SCAN  (PÖ + Scan)
+                              · 2 Personen →  PO       (nur PÖ)
+                            Alle drei Aufgaben gleicher grauer Farbcode.
+• Nachmittag pro Tag:       Genau 1 Person scannt, Task-Code "Scan".
+                            Es gibt am Nachmittag KEIN PÖ.
+• "PO" kann allein laufen oder mit PO/ABKL kombiniert werden.
+• Kein Scanning (weder PO/SCAN noch Scan) für:
+    Brigitte, Corinne, Maria B., Saskia, Dragi
+• Restliche, nicht zugeordnete NM-Plätze werden mit ERF7 (nicht PO)
+  aufgefüllt – PÖ-Tätigkeiten gibt es nur morgens.
 
 ────────────────────────────────────────────────────────────────────────
 5) ERF7 / HUB
