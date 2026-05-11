@@ -23,9 +23,11 @@ from pathlib import Path
 import streamlit as st
 
 # ── Kern-Logik importieren ────────────────────────────────────────────
+# Reihenfolge wichtig: BASE_DIR muss in sys.path VOR dem Legacy-App-Dir
+# stehen, sonst importiert Python die veraltete arbeitskalender.py-Kopie.
 BASE_DIR = Path(__file__).resolve().parent
 APP_DIR = BASE_DIR / "ksc_arbeitsplan" / "app"
-for p in (str(BASE_DIR), str(APP_DIR)):
+for p in (str(APP_DIR), str(BASE_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -147,9 +149,12 @@ TASK_PILL = {
     "ERF9/Q":   ("#FFD0D0", "#9B1C1C"),
     "ERF9/TEL": ("#FFD0D0", "#9B1C1C"),
     "ERF4/SCH": ("#E2EFDA", "#386641"),
+    "ERF7/SCH": ("#E2EFDA", "#386641"),
     "ERF5":     ("#FCE4D6", "#9C4A1A"),
     "PO":       ("#E7E6E6", "#3F3F3F"),
     "PO/SCAN":  ("#E7E6E6", "#3F3F3F"),
+    "Scan":     ("#E7E6E6", "#3F3F3F"),
+    "SCAN":     ("#E7E6E6", "#3F3F3F"),
     "PO/ABKL":  ("#FFE9B0", "#7A4F00"),
     "PO/TEL":   ("#D6F0DE", "#1E6F3D"),
     "HO":       ("#DDEBF7", "#1F4E79"),
