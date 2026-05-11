@@ -857,9 +857,39 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     # WOCHENAUFGABEN (je 1 Person pro Typ)
     # ════════════════════════════════════════════════════════════
     
-    sched.wochenaufgabe_direkt = DIREKT_ERLAUBT[state.get("direkt_idx", 0) % len(DIREKT_ERLAUBT)]
-    sched.wochenaufgabe_onb = ONB_ERLAUBT[state.get("onb_idx", 0) % len(ONB_ERLAUBT)]
-    sched.wochenaufgabe_btm = BTM_ERLAUBT[state.get("btm_idx", 0) % len(BTM_ERLAUBT)]
+    # ════════════════════════════════════════════════════════════
+    # WOCHENAUFGABEN
+    # Direkt / ONB / BTM rotieren unabhängig, ABER eine Person darf
+    # nur EINE Wochenaufgabe pro Woche bekommen. Bei Konflikten wird
+    # der Index in der Pool-Liste weitergeschoben, bis eine andere
+    # Person frei ist.
+    # ════════════════════════════════════════════════════════════
+
+    def _pick_unique(pool, start_idx, used):
+        n = len(pool)
+        for offset in range(n):
+            name = pool[(start_idx + offset) % n]
+            if name not in used:
+                return name
+        # Pool komplett ausgereizt → trotzdem Original-Index nehmen
+        return pool[start_idx % n]
+
+    used_weekly: set = set()
+
+    sched.wochenaufgabe_direkt = _pick_unique(
+        DIREKT_ERLAUBT, state.get("direkt_idx", 0), used_weekly
+    )
+    used_weekly.add(sched.wochenaufgabe_direkt)
+
+    sched.wochenaufgabe_onb = _pick_unique(
+        ONB_ERLAUBT, state.get("onb_idx", 0), used_weekly
+    )
+    used_weekly.add(sched.wochenaufgabe_onb)
+
+    sched.wochenaufgabe_btm = _pick_unique(
+        BTM_ERLAUBT, state.get("btm_idx", 0), used_weekly
+    )
+    used_weekly.add(sched.wochenaufgabe_btm)
     
     save_state(state, state_file)
     return sched
