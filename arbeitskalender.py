@@ -40,7 +40,8 @@ TASK_COLORS = {
     "ERF9":      "FF0000",  # Rot
     "ERF9/Q":    "FF0000",
     "ERF9/TEL":  "FF0000",
-    "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter
+    "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter (legacy)
+    "ERF7/SCH":  "C6EFCE",  # Hellgrün - Schalter (kombiniert mit ERF7)
     "ERF5":      "F4B084",  # Hellorange - Labor
     "PO":        "D6DCE4",  # Grau
     "PO/ABKL":   "FFC000",
@@ -452,9 +453,10 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 break
 
     # ════════════════════════════════════════════════════════════
-    # SCHALTER - 1 Person pro Tag, GANZER Tag (VM + NM)
+    # SCHALTER - HALBTAGS, kombiniert mit ERF7 (Task: ERF7/SCH)
+    # 1 Person VM + 1 andere Person NM pro Werktag.
+    # Rotation: jede Person ca. alle 2 Wochen am Schalter.
     # Vor TEL/ABKL platzieren, damit beide Slots noch frei sind.
-    # Wochenrotation (schalter_group) erhält die 2-Wochen-Rhythmik.
     # ════════════════════════════════════════════════════════════
 
     schalter_exclude = {"Linda", "Florence", "Corinne", "Maria B.", "Andrea A.",
@@ -468,18 +470,26 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
     schalter_active = (schalter_eligible[:mid] if schalter_group == 0
                        else schalter_eligible[mid:])
 
-    schalter_pool = list(schalter_active)
-    random.shuffle(schalter_pool)
-    schalter_used = set()
+    schalter_count = {n: 0 for n in schalter_active}
     for day in range(5):
-        for name in schalter_pool:
-            if name in schalter_used:
-                continue
-            if sched.is_free(name, day, 0) and sched.is_free(name, day, 1):
-                sched.assign(name, day, 0, "ERF4/SCH")
-                sched.assign(name, day, 1, "ERF4/SCH")
-                schalter_used.add(name)
-                break
+        # Vormittag: am wenigsten genutzte Person aus dem aktiven Pool
+        vm_pool = sorted(schalter_active,
+                         key=lambda n: (schalter_count[n], random.random()))
+        vm_pick = None
+        for name in vm_pool:
+            if sched.is_free(name, day, 0):
+                if sched.assign(name, day, 0, "ERF7/SCH"):
+                    schalter_count[name] += 1
+                    vm_pick = name
+                    break
+        # Nachmittag: andere Person, ebenfalls am wenigsten genutzt
+        nm_pool = sorted([n for n in schalter_active if n != vm_pick],
+                         key=lambda n: (schalter_count[n], random.random()))
+        for name in nm_pool:
+            if sched.is_free(name, day, 1):
+                if sched.assign(name, day, 1, "ERF7/SCH"):
+                    schalter_count[name] += 1
+                    break
 
     # ════════════════════════════════════════════════════════════
     # ERF7/HUB - HALBTAGS, jeden Werktag 1 Person VM + 1 (andere) NM
