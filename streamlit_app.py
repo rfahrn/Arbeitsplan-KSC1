@@ -142,41 +142,36 @@ ABSENCE_TYPES = {
 
 DAY_SHORTS = ["Mo", "Di", "Mi", "Do", "Fr"]
 
-# Pastellfarben für die Pill-Zellen — bg + dunklere Schrift
-TASK_PILL = {
-    "TEL":      ("#D6F0DE", "#1E6F3D"),
-    "ABKL":     ("#FFE9B0", "#7A4F00"),
-    "KTG":      ("#D6F0DE", "#1E6F3D"),
-    "KGS":      ("#D6F0DE", "#1E6F3D"),
-    "ERF7":     ("#DCEAF7", "#1F4E79"),
-    "ERF7/Q":   ("#DCEAF7", "#1F4E79"),
-    "ERF7/HUB": ("#FFE0CC", "#9C5400"),
-    "ERF8":     ("#FFD9D2", "#8C2A1C"),
-    "ERF8/Q":   ("#FFD9D2", "#8C2A1C"),
-    "ERF8/HUB": ("#FFE0CC", "#9C5400"),
-    "ERF9":     ("#FFD0D0", "#9B1C1C"),
-    "ERF9/Q":   ("#FFD0D0", "#9B1C1C"),
-    "ERF9/TEL": ("#FFD0D0", "#9B1C1C"),
-    "ERF4/SCH": ("#E2EFDA", "#386641"),
-    "ERF7/SCH": ("#E2EFDA", "#386641"),
-    "ERF5":     ("#FCE4D6", "#9C4A1A"),
-    "PO":       ("#E7E6E6", "#3F3F3F"),
-    "PO/SCAN":  ("#E7E6E6", "#3F3F3F"),
-    "Scan":     ("#E7E6E6", "#3F3F3F"),
-    "SCAN":     ("#E7E6E6", "#3F3F3F"),
-    "PO/ABKL":  ("#FFE9B0", "#7A4F00"),
-    "PO/TEL":   ("#D6F0DE", "#1E6F3D"),
-    "HO":       ("#DDEBF7", "#1F4E79"),
-    "HO/Q":     ("#DDEBF7", "#1F4E79"),
-    "VBZ/Q":    ("#E2EFDA", "#386641"),
-    "KSC Spez.":("#FFF2CC", "#806000"),
-    "TAGES PA": ("#CFEFFA", "#0E6E8C"),
-    "TAGESPA":  ("#CFEFFA", "#0E6E8C"),
-    "RX Abo":   ("#E7E6E6", "#3F3F3F"),
-    "KRANK":    ("#FFC7CE", "#9C0006"),
-    "FERIEN":   ("#F2F2F2", "#595959"),
-    "scanning": ("#E2EFDA", "#386641"),
-}
+# Pastellfarben für die Pill-Zellen — bg + dunklere Schrift.
+# Wird automatisch aus arbeitskalender.TASK_COLORS abgeleitet, damit
+# Excel-Export und Streamlit-UI dieselbe Farbquelle nutzen.
+# Anpassungen daher NUR in arbeitskalender.TASK_COLORS vornehmen.
+
+def _fg_for(bg_hex: str) -> str:
+    """Wählt schwarzen oder weissen Text basierend auf BG-Helligkeit."""
+    h = bg_hex.lstrip("#")
+    if len(h) != 6:
+        return "#1F1F1F"
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return "#1F1F1F"
+    # Wahrgenommene Helligkeit (Rec. 601)
+    lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#1F1F1F" if lum > 0.6 else "#FFFFFF"
+
+
+def _build_task_pill() -> dict[str, tuple[str, str]]:
+    out: dict[str, tuple[str, str]] = {}
+    for code, bg in _ak.TASK_COLORS.items():
+        if not code or not bg:
+            continue
+        bg_css = bg if bg.startswith("#") else f"#{bg}"
+        out[code] = (bg_css, _fg_for(bg))
+    return out
+
+
+TASK_PILL = _build_task_pill()
 
 # Drop-down options for the editable Wochenplan. Order: leer, Pflichtrollen,
 # Erfassungs-Kombis, PO-Kombis, Schalter / Labor, HO, Spezialrollen,
