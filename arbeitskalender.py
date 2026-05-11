@@ -507,6 +507,45 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
             sched.assign(nm_pick, day, 1, "ERF7/HUB")
 
     # ════════════════════════════════════════════════════════════
+    # PÖ (Postöffnung) + SCANNING - VOR TEL/ABKL einplanen, damit
+    # die 3 PÖ-Plätze morgens garantiert sind.
+    #   Morgens: 1 PO/SCAN + 2 PO  (3 PÖ-Personen)
+    #   Nachmittag: 1 Scan (kein PÖ)
+    # ════════════════════════════════════════════════════════════
+
+    no_scanning = {"Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"}
+
+    def _pick_one(day, slot, task, *, exclude_scanning):
+        pool = [n for n in employees
+                if (not exclude_scanning or n not in no_scanning)
+                and not employees[n].is_tl
+                and sched.is_free(n, day, slot)]
+        random.shuffle(pool)
+        for name in pool:
+            if sched.assign(name, day, slot, task):
+                return name
+        return None
+
+    def _pick_n_po(day, slot, count):
+        pool = [n for n in employees
+                if not employees[n].is_tl
+                and sched.is_free(n, day, slot)]
+        random.shuffle(pool)
+        assigned = 0
+        for name in pool:
+            if assigned >= count:
+                break
+            if sched.assign(name, day, slot, "PO"):
+                assigned += 1
+
+    for day in range(5):
+        # Vormittag: 1 PO/SCAN + 2 PO  → insgesamt 3 PÖ-Personen
+        _pick_one(day, 0, "PO/SCAN", exclude_scanning=True)
+        _pick_n_po(day, 0, 2)
+        # Nachmittag: nur 1 Scan (kein PÖ)
+        _pick_one(day, 1, "Scan", exclude_scanning=True)
+
+    # ════════════════════════════════════════════════════════════
     # TEL (4 Mo VM, sonst 3)
     # ════════════════════════════════════════════════════════════
     
@@ -584,46 +623,6 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 sched.assign(name, day, 0, "ERF9")
                 break
     
-    # ════════════════════════════════════════════════════════════
-    # PÖ (Postöffnung) + SCANNING
-    #   Morgens: 3 Personen für PÖ insgesamt
-    #            → 1 Person  PO/SCAN  (PÖ + Scan)
-    #            → 2 Personen PO       (nur PÖ)
-    #   Nachmittag: NUR 1 Person Scan (kein PÖ am Nachmittag)
-    # ════════════════════════════════════════════════════════════
-
-    no_scanning = {"Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"}
-
-    def _pick_one(day, slot, task, *, exclude_scanning):
-        pool = [n for n in employees
-                if (not exclude_scanning or n not in no_scanning)
-                and not employees[n].is_tl
-                and sched.is_free(n, day, slot)]
-        random.shuffle(pool)
-        for name in pool:
-            if sched.assign(name, day, slot, task):
-                return name
-        return None
-
-    def _pick_n_po(day, slot, count):
-        pool = [n for n in employees
-                if not employees[n].is_tl
-                and sched.is_free(n, day, slot)]
-        random.shuffle(pool)
-        assigned = 0
-        for name in pool:
-            if assigned >= count:
-                break
-            if sched.assign(name, day, slot, "PO"):
-                assigned += 1
-
-    for day in range(5):
-        # Vormittag: 1 PO/SCAN + 2 PO  → insgesamt 3 PÖ-Personen
-        _pick_one(day, 0, "PO/SCAN", exclude_scanning=True)
-        _pick_n_po(day, 0, 2)
-        # Nachmittag: nur 1 Scan (kein PÖ)
-        _pick_one(day, 1, "Scan", exclude_scanning=True)
-
     # ════════════════════════════════════════════════════════════
     # Restliche freie Slots auffüllen
     #   TLs            → ERF7/Q (Queue)
