@@ -43,10 +43,12 @@ TASK_COLORS = {
     "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter (legacy)
     "ERF7/SCH":  "C6EFCE",  # Hellgrün - Schalter (kombiniert mit ERF7)
     "ERF5":      "F4B084",  # Hellorange - Labor
-    "PO":        "D6DCE4",  # Grau
+    "PO":        "D6DCE4",  # Grau - PÖ (Postöffnung) ohne Scan
     "PO/ABKL":   "FFC000",
     "PO/TEL":    "92D050",
-    "PO/SCAN":   "A9D18E",  # Hellgrün
+    "PO/SCAN":   "D6DCE4",  # Grau - PÖ + Scan (morgens)
+    "Scan":      "D6DCE4",  # Grau - nur Scannen (nachmittags)
+    "SCAN":      "D6DCE4",
     "HO":        "BDD7EE",  # Hellblau
     "HO/Q":      "BDD7EE",
     "VBZ/Q":     "C5E0B4",  # Lindgrün
@@ -591,23 +593,27 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 break
     
     # ════════════════════════════════════════════════════════════
-    # PO / SCANNING (Morgen: 1 PO/SCAN + 2 PO; Nachmittag: 1 PO/SCAN)
+    # PÖ (Postöffnung) + SCANNING
+    #   Morgens: 3 Personen für PÖ insgesamt
+    #            → 1 Person  PO/SCAN  (PÖ + Scan)
+    #            → 2 Personen PO       (nur PÖ)
+    #   Nachmittag: NUR 1 Person Scan (kein PÖ am Nachmittag)
     # ════════════════════════════════════════════════════════════
 
     no_scanning = {"Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"}
 
-    def _scan_pick(day, slot):
-        """1 Person als PO/SCAN für (day, slot) wählen."""
+    def _pick_one(day, slot, task, *, exclude_scanning):
         pool = [n for n in employees
-                if n not in no_scanning
+                if (not exclude_scanning or n not in no_scanning)
                 and not employees[n].is_tl
                 and sched.is_free(n, day, slot)]
         random.shuffle(pool)
-        if pool:
-            sched.assign(pool[0], day, slot, "PO/SCAN")
+        for name in pool:
+            if sched.assign(name, day, slot, task):
+                return name
+        return None
 
-    def _po_pick(day, slot, count):
-        """`count` weitere Personen mit PO belegen."""
+    def _pick_n_po(day, slot, count):
         pool = [n for n in employees
                 if not employees[n].is_tl
                 and sched.is_free(n, day, slot)]
@@ -620,15 +626,17 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 assigned += 1
 
     for day in range(5):
-        # Vormittag: 1 PO/SCAN + 2 PO
-        _scan_pick(day, 0)
-        _po_pick(day, 0, 2)
-        # Nachmittag: nur 1 PO/SCAN
-        _scan_pick(day, 1)
+        # Vormittag: 1 PO/SCAN + 2 PO  → insgesamt 3 PÖ-Personen
+        _pick_one(day, 0, "PO/SCAN", exclude_scanning=True)
+        _pick_n_po(day, 0, 2)
+        # Nachmittag: nur 1 Scan (kein PÖ)
+        _pick_one(day, 1, "Scan", exclude_scanning=True)
 
     # ════════════════════════════════════════════════════════════
     # Restliche freie Slots auffüllen
-    # TLs → ERF7/Q (Queue). Andere → PO (keine zusätzlichen Scanner).
+    #   TLs            → ERF7/Q (Queue)
+    #   andere VM      → PO     (PÖ ist nur morgens, also default = PÖ)
+    #   andere NM      → ERF7   (keine PÖ-/Scan-Mehrfachzuweisung NM)
     # ════════════════════════════════════════════════════════════
 
     for name in employees:
@@ -637,8 +645,10 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 if sched.is_free(name, day, slot):
                     if employees[name].is_tl:
                         sched.assign(name, day, slot, "ERF7/Q")
-                    else:
+                    elif slot == 0:
                         sched.assign(name, day, slot, "PO")
+                    else:
+                        sched.assign(name, day, slot, "ERF7")
     
     # ════════════════════════════════════════════════════════════
     # HILFSFUNKTION: Prüft ob Person an einem Tag verfügbar ist
