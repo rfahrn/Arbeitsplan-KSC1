@@ -40,12 +40,15 @@ TASK_COLORS = {
     "ERF9":      "FF0000",  # Rot
     "ERF9/Q":    "FF0000",
     "ERF9/TEL":  "FF0000",
-    "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter
+    "ERF4/SCH":  "C6EFCE",  # Hellgrün - Schalter (legacy)
+    "ERF7/SCH":  "C6EFCE",  # Hellgrün - Schalter (kombiniert mit ERF7)
     "ERF5":      "F4B084",  # Hellorange - Labor
-    "PO":        "D6DCE4",  # Grau
+    "PO":        "D6DCE4",  # Grau - PÖ (Postöffnung) ohne Scan
     "PO/ABKL":   "FFC000",
     "PO/TEL":    "92D050",
-    "PO/SCAN":   "A9D18E",  # Hellgrün
+    "PO/SCAN":   "D6DCE4",  # Grau - PÖ + Scan (morgens)
+    "Scan":      "D6DCE4",  # Grau - nur Scannen (nachmittags)
+    "SCAN":      "D6DCE4",
     "HO":        "BDD7EE",  # Hellblau
     "HO/Q":      "BDD7EE",
     "VBZ/Q":     "C5E0B4",  # Lindgrün
@@ -334,28 +337,23 @@ class Schedule:
 def build_schedule(week_number, week_start_date, overrides=None, state_file="scheduler_state.json"):
     employees = create_employees(week_number)
     sched = Schedule(employees, week_number, week_start_date)
-
-    # Seed the random generator from the calendar week so each week's random
-    # picks (TEL/ABKL/ERF8/ERF9/HUB filler, PHC fallbacks) are deterministic
-    # *and* different from the neighbouring week.
-    random.seed(week_number * 7919)
-
+    
     state = load_state(state_file)
-
-    # Rotations are pure functions of the ISO calendar week so that consecutive
-    # weeks (KW20 vs KW21) always look different, regardless of generation order
-    # or the contents of the state file. The state file is still loaded / saved
-    # for backward compatibility but no longer drives the rotation pattern.
-    state["last_generated_week"] = week_number
-    state["linda_ho_week"] = (week_number % 2 == 1)
-    state["labor_jesika"] = (week_number % 2 == 0)
-    state["schalter_group"] = week_number % 2
-    state["friday_phc_corinne"] = (week_number % 2 == 0)
-    state["tl_monday_idx"] = week_number % 3
-    state["tv_start_day"] = week_number % 3
-    state["onb_idx"] = week_number % len(ONB_ERLAUBT)
-    state["direkt_idx"] = week_number % len(DIREKT_ERLAUBT)
-    state["btm_idx"] = week_number % len(BTM_ERLAUBT)
+    
+    last_week = state.get("last_generated_week", 0)
+    is_new_week = (last_week != week_number)
+    
+    if is_new_week:
+        state["last_generated_week"] = week_number
+        state["linda_ho_week"] = not state.get("linda_ho_week", False)
+        state["labor_jesika"] = not state.get("labor_jesika", True)
+        state["schalter_group"] = 1 - state.get("schalter_group", 0)
+        state["friday_phc_corinne"] = not state.get("friday_phc_corinne", True)
+        state["tl_monday_idx"] = (state.get("tl_monday_idx", 0) + 1) % 3
+        state["tv_start_day"] = (state.get("tv_start_day", 0) + 1) % 4
+        state["onb_idx"] = (state.get("onb_idx", 0) + 1) % len(ONB_ERLAUBT)
+        state["direkt_idx"] = (state.get("direkt_idx", 0) + 1) % len(DIREKT_ERLAUBT)
+        state["btm_idx"] = (state.get("btm_idx", 0) + 1) % len(BTM_ERLAUBT)
     
     # Overrides verarbeiten
     if overrides:
@@ -393,8 +391,8 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
         sched.assign("Linda", 1, 0, "HO/Q")
         sched.assign("Linda", 1, 1, "HO/Q")
     
-    # Dipiga TAGES PA Di VM, KGS Do NM
-    sched.assign("Dipiga", 1, 0, "TAGES PA")
+    # Dipiga KGS: Di-morgens und Do-nachmittags
+    sched.assign("Dipiga", 1, 0, "KGS")
     sched.assign("Dipiga", 3, 1, "KGS")
     
     # Martina KSC Spez. Di/Do VM
@@ -408,7 +406,145 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
         sched.assign("Jesika", 2, 1, "ERF5")
     else:
         sched.assign("Dipiga", 2, 1, "ERF5")
-    
+
+    # ════════════════════════════════════════════════════════════
+    # SCHALTER - 1 Person pro Tag, GANZER Tag (VM + NM dieselbe Person)
+    # Zuerst zuweisen (vor TPA/RX Abo/HUB), damit ganztags-fähige
+    # Personen reserviert werden. Task-Code: ERF7/SCH.
+    # Rotation: schalter_group wechselt wöchentlich → 2-Wochen-Rhythmus.
+    # ════════════════════════════════════════════════════════════
+
+    schalter_exclude = {"Linda", "Florence", "Corinne", "Maria B.", "Andrea A.",
+                        "Brigitte", "Saskia", "Dragi"}
+    schalter_eligible = sorted([n for n in employees
+                                if employees[n].can_schalter
+                                and n not in schalter_exclude])
+
+    schalter_group = state.get("schalter_group", 0)
+    mid = len(schalter_eligible) // 2
+    schalter_active = (schalter_eligible[:mid] if schalter_group == 0
+                       else schalter_eligible[mid:])
+
+    schalter_pool = list(schalter_active)
+    random.shuffle(schalter_pool)
+    schalter_used = set()
+    for day in range(5):
+        for name in schalter_pool:
+            if name in schalter_used:
+                continue
+            if sched.is_free(name, day, 0) and sched.is_free(name, day, 1):
+                sched.assign(name, day, 0, "ERF7/SCH")
+                sched.assign(name, day, 1, "ERF7/SCH")
+                schalter_used.add(name)
+                break
+
+    # ════════════════════════════════════════════════════════════
+    # RX ABO - 2x pro Woche, halbtags, je 1 Person aus Pool
+    # Pool: Linda, Lara, Isaura, Martina
+    # ════════════════════════════════════════════════════════════
+
+    rx_eligible = ["Linda", "Lara", "Isaura", "Martina"]
+    random.shuffle(rx_eligible)
+    rx_slots = [(d, s) for d in range(5) for s in range(2)]
+    random.shuffle(rx_slots)
+
+    rx_used_days = set()  # höchstens 1 RX Abo pro Tag
+    rx_assigned = 0
+    for (d, s) in rx_slots:
+        if rx_assigned >= 2:
+            break
+        if d in rx_used_days:
+            continue
+        for name in rx_eligible:
+            if sched.is_free(name, d, s):
+                if sched.assign(name, d, s, "RX Abo"):
+                    rx_used_days.add(d)
+                    rx_assigned += 1
+                    break
+
+    # ════════════════════════════════════════════════════════════
+    # TAGESPHARM (1 Person pro Tag, GANZER Tag = VM + NM)
+    # Pro Person max. 1× pro Woche (keine Mehrfachzuweisung)
+    # ════════════════════════════════════════════════════════════
+
+    tpa_exclude = {"Brigitte", "Saskia", "Dragi", "Maria B.",
+                   "Andrea A.", "Florence"}
+    tpa_candidates = [n for n in employees
+                      if n not in tpa_exclude
+                      and not employees[n].is_tl]
+    random.shuffle(tpa_candidates)
+    tpa_used = set()
+
+    for day in range(5):
+        for name in tpa_candidates:
+            if name in tpa_used:
+                continue
+            if sched.is_free(name, day, 0) and sched.is_free(name, day, 1):
+                sched.assign(name, day, 0, "TAGES PA")
+                sched.assign(name, day, 1, "TAGES PA")
+                tpa_used.add(name)
+                break
+
+    # ════════════════════════════════════════════════════════════
+    # ERF7/HUB - HALBTAGS, jeden Werktag 1 Person VM + 1 (andere) NM
+    # ════════════════════════════════════════════════════════════
+
+    hub_eligible = ["Jesika", "Dragi", "Lara", "Corinne", "Dipiga",
+                    "Nina", "Amra", "Alessia"]
+
+    for day in range(5):
+        vm_pool = [n for n in hub_eligible if sched.is_free(n, day, 0)]
+        random.shuffle(vm_pool)
+        vm_pick = vm_pool[0] if vm_pool else None
+        if vm_pick:
+            sched.assign(vm_pick, day, 0, "ERF7/HUB")
+
+        nm_pool = [n for n in hub_eligible
+                   if n != vm_pick and sched.is_free(n, day, 1)]
+        random.shuffle(nm_pool)
+        nm_pick = nm_pool[0] if nm_pool else None
+        if nm_pick:
+            sched.assign(nm_pick, day, 1, "ERF7/HUB")
+
+    # ════════════════════════════════════════════════════════════
+    # PÖ (Postöffnung) + SCANNING - VOR TEL/ABKL einplanen, damit
+    # die 3 PÖ-Plätze morgens garantiert sind.
+    #   Morgens: 1 PO/SCAN + 2 PO  (3 PÖ-Personen)
+    #   Nachmittag: 1 Scan (kein PÖ)
+    # ════════════════════════════════════════════════════════════
+
+    no_scanning = {"Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"}
+
+    def _pick_one(day, slot, task, *, exclude_scanning):
+        pool = [n for n in employees
+                if (not exclude_scanning or n not in no_scanning)
+                and not employees[n].is_tl
+                and sched.is_free(n, day, slot)]
+        random.shuffle(pool)
+        for name in pool:
+            if sched.assign(name, day, slot, task):
+                return name
+        return None
+
+    def _pick_n_po(day, slot, count):
+        pool = [n for n in employees
+                if not employees[n].is_tl
+                and sched.is_free(n, day, slot)]
+        random.shuffle(pool)
+        assigned = 0
+        for name in pool:
+            if assigned >= count:
+                break
+            if sched.assign(name, day, slot, "PO"):
+                assigned += 1
+
+    for day in range(5):
+        # Vormittag: 1 PO/SCAN + 2 PO  → insgesamt 3 PÖ-Personen
+        _pick_one(day, 0, "PO/SCAN", exclude_scanning=True)
+        _pick_n_po(day, 0, 2)
+        # Nachmittag: nur 1 Scan (kein PÖ)
+        _pick_one(day, 1, "Scan", exclude_scanning=True)
+
     # ════════════════════════════════════════════════════════════
     # TEL (4 Mo VM, sonst 3)
     # ════════════════════════════════════════════════════════════
@@ -488,59 +624,20 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 break
     
     # ════════════════════════════════════════════════════════════
-    # ERF7/HUB
+    # Restliche freie Slots auffüllen
+    #   TLs            → ERF7/Q (Queue)
+    #   andere VM      → PO     (PÖ ist nur morgens, also default = PÖ)
+    #   andere NM      → ERF7   (keine PÖ-/Scan-Mehrfachzuweisung NM)
     # ════════════════════════════════════════════════════════════
-    
-    hub_eligible = ["Jesika", "Dragi", "Lara", "Corinne", "Dipiga", "Nina", "Amra", "Alessia"]
-    
-    for day in range(5):
-        random.shuffle(hub_eligible)
-        hub_count = 0
-        for name in hub_eligible:
-            if hub_count >= 2:
-                break
-            for slot in [0, 1]:
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "ERF7/HUB")
-                    hub_count += 1
-                    break
-    
-    # ════════════════════════════════════════════════════════════
-    # SCHALTER
-    # ════════════════════════════════════════════════════════════
-    
-    schalter_exclude = {"Linda", "Florence", "Corinne", "Maria B.", "Andrea A.",
-                        "Brigitte", "Saskia", "Dragi"}
-    schalter_eligible = sorted([n for n in employees if employees[n].can_schalter and n not in schalter_exclude])
-    
-    schalter_group = state.get("schalter_group", 0)
-    mid = len(schalter_eligible) // 2
-    schalter_active = schalter_eligible[:mid] if schalter_group == 0 else schalter_eligible[mid:]
-    
-    for name in schalter_active:
-        for day in range(5):
-            for slot in [0, 1]:
-                if sched.is_free(name, day, slot):
-                    sched.assign(name, day, slot, "ERF4/SCH")
-                    break
-            else:
-                continue
-            break
-    
-    # ════════════════════════════════════════════════════════════
-    # Restliche Slots
-    # ════════════════════════════════════════════════════════════
-    
-    no_scanning = {"Brigitte", "Corinne", "Maria B.", "Saskia", "Dragi"}
-    
+
     for name in employees:
         for day in range(5):
             for slot in range(2):
                 if sched.is_free(name, day, slot):
                     if employees[name].is_tl:
                         sched.assign(name, day, slot, "ERF7/Q")
-                    elif name not in no_scanning:
-                        sched.assign(name, day, slot, "PO/SCAN" if random.random() > 0.5 else "ERF7")
+                    elif slot == 0:
+                        sched.assign(name, day, slot, "PO")
                     else:
                         sched.assign(name, day, slot, "ERF7")
     
