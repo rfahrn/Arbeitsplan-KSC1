@@ -87,7 +87,10 @@ arbeitskalender.py.
 ────────────────────────────────────────────────────────────────────────
 12) RX ABO
 ────────────────────────────────────────────────────────────────────────
-• Berechtigt: Lara, Linda, Isa, Martina
+• Berechtigt: Linda, Lara, Isa (Isaura), Martina
+• Nur HALBTAGS (nicht ganztags)
+• 2× pro Woche – jedes Mal genau 1 Person aus dem Pool
+• Max. 1 RX Abo pro Tag
 
 ────────────────────────────────────────────────────────────────────────
 13) DIREKTBESTELLUNG (Wochenaufgabe)
@@ -132,8 +135,9 @@ arbeitskalender.py.
 ────────────────────────────────────────────────────────────────────────
 19) HOME OFFICE / SPEZIALITÄTEN
 ────────────────────────────────────────────────────────────────────────
-• Maria B.:      Montagmorgen HO
-• Linda:         alle 2 Wochen am Dienstag HO (ganztags)
+• Maria B.:      Montagmorgen HO (immer nur "HO", nie HO/Q)
+• Linda:         alle 2 Wochen am Dienstag HO – ganztags und IMMER
+                 als "HO/Q" (Queue-Abdeckung von zu Hause)
 • Florence:      Pö wenn an einem Dienstag
 
 ────────────────────────────────────────────────────────────────────────

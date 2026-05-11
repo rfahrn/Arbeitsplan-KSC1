@@ -405,6 +405,30 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
         sched.assign("Dipiga", 2, 1, "ERF5")
 
     # ════════════════════════════════════════════════════════════
+    # RX ABO - 2x pro Woche, halbtags, je 1 Person aus Pool
+    # Pool: Linda, Lara, Isaura, Martina
+    # ════════════════════════════════════════════════════════════
+
+    rx_eligible = ["Linda", "Lara", "Isaura", "Martina"]
+    random.shuffle(rx_eligible)
+    rx_slots = [(d, s) for d in range(5) for s in range(2)]
+    random.shuffle(rx_slots)
+
+    rx_used_days = set()  # höchstens 1 RX Abo pro Tag
+    rx_assigned = 0
+    for (d, s) in rx_slots:
+        if rx_assigned >= 2:
+            break
+        if d in rx_used_days:
+            continue
+        for name in rx_eligible:
+            if sched.is_free(name, d, s):
+                if sched.assign(name, d, s, "RX Abo"):
+                    rx_used_days.add(d)
+                    rx_assigned += 1
+                    break
+
+    # ════════════════════════════════════════════════════════════
     # TAGESPHARM (1 Person pro Tag, GANZER Tag = VM + NM)
     # Pro Person max. 1× pro Woche (keine Mehrfachzuweisung)
     # ════════════════════════════════════════════════════════════
