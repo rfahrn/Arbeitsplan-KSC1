@@ -408,6 +408,37 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
         sched.assign("Dipiga", 2, 1, "ERF5")
 
     # ════════════════════════════════════════════════════════════
+    # SCHALTER - 1 Person pro Tag, GANZER Tag (VM + NM dieselbe Person)
+    # Zuerst zuweisen (vor TPA/RX Abo/HUB), damit ganztags-fähige
+    # Personen reserviert werden. Task-Code: ERF7/SCH.
+    # Rotation: schalter_group wechselt wöchentlich → 2-Wochen-Rhythmus.
+    # ════════════════════════════════════════════════════════════
+
+    schalter_exclude = {"Linda", "Florence", "Corinne", "Maria B.", "Andrea A.",
+                        "Brigitte", "Saskia", "Dragi"}
+    schalter_eligible = sorted([n for n in employees
+                                if employees[n].can_schalter
+                                and n not in schalter_exclude])
+
+    schalter_group = state.get("schalter_group", 0)
+    mid = len(schalter_eligible) // 2
+    schalter_active = (schalter_eligible[:mid] if schalter_group == 0
+                       else schalter_eligible[mid:])
+
+    schalter_pool = list(schalter_active)
+    random.shuffle(schalter_pool)
+    schalter_used = set()
+    for day in range(5):
+        for name in schalter_pool:
+            if name in schalter_used:
+                continue
+            if sched.is_free(name, day, 0) and sched.is_free(name, day, 1):
+                sched.assign(name, day, 0, "ERF7/SCH")
+                sched.assign(name, day, 1, "ERF7/SCH")
+                schalter_used.add(name)
+                break
+
+    # ════════════════════════════════════════════════════════════
     # RX ABO - 2x pro Woche, halbtags, je 1 Person aus Pool
     # Pool: Linda, Lara, Isaura, Martina
     # ════════════════════════════════════════════════════════════
@@ -453,45 +484,6 @@ def build_schedule(week_number, week_start_date, overrides=None, state_file="sch
                 sched.assign(name, day, 1, "TAGES PA")
                 tpa_used.add(name)
                 break
-
-    # ════════════════════════════════════════════════════════════
-    # SCHALTER - HALBTAGS, kombiniert mit ERF7 (Task: ERF7/SCH)
-    # 1 Person VM + 1 andere Person NM pro Werktag.
-    # Rotation: jede Person ca. alle 2 Wochen am Schalter.
-    # Vor TEL/ABKL platzieren, damit beide Slots noch frei sind.
-    # ════════════════════════════════════════════════════════════
-
-    schalter_exclude = {"Linda", "Florence", "Corinne", "Maria B.", "Andrea A.",
-                        "Brigitte", "Saskia", "Dragi"}
-    schalter_eligible = sorted([n for n in employees
-                                if employees[n].can_schalter
-                                and n not in schalter_exclude])
-
-    schalter_group = state.get("schalter_group", 0)
-    mid = len(schalter_eligible) // 2
-    schalter_active = (schalter_eligible[:mid] if schalter_group == 0
-                       else schalter_eligible[mid:])
-
-    schalter_count = {n: 0 for n in schalter_active}
-    for day in range(5):
-        # Vormittag: am wenigsten genutzte Person aus dem aktiven Pool
-        vm_pool = sorted(schalter_active,
-                         key=lambda n: (schalter_count[n], random.random()))
-        vm_pick = None
-        for name in vm_pool:
-            if sched.is_free(name, day, 0):
-                if sched.assign(name, day, 0, "ERF7/SCH"):
-                    schalter_count[name] += 1
-                    vm_pick = name
-                    break
-        # Nachmittag: andere Person, ebenfalls am wenigsten genutzt
-        nm_pool = sorted([n for n in schalter_active if n != vm_pick],
-                         key=lambda n: (schalter_count[n], random.random()))
-        for name in nm_pool:
-            if sched.is_free(name, day, 1):
-                if sched.assign(name, day, 1, "ERF7/SCH"):
-                    schalter_count[name] += 1
-                    break
 
     # ════════════════════════════════════════════════════════════
     # ERF7/HUB - HALBTAGS, jeden Werktag 1 Person VM + 1 (andere) NM
