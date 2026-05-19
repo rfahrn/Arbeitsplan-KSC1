@@ -191,12 +191,12 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
                 emp.available[(d, s)] = True
     
     # Silvana - 100% (TL)
-    e = Employee("Grossenbacher Silvana", "Silvana", 100, can_direkt=True, is_tl=True)
+    e = Employee("G. Silvana", "Silvana", 100, can_direkt=True, is_tl=True)
     full_week(e)
     employees["Silvana"] = e
     
     # Linda - 90%, jeden 2. Freitag frei (TL)
-    e = Employee("Rexhaj Majlinda", "Linda", 90, can_rx_abo=True, is_tl=True)
+    e = Employee("R. Majlinda", "Linda", 90, can_rx_abo=True, is_tl=True)
     full_week(e)
     if is_even_week:
         e.available[(4, 0)] = False
@@ -204,22 +204,22 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Linda"] = e
     
     # Lara - 100% (TL)
-    e = Employee("Lara Ierano", "Lara", 100, can_rx_abo=True, can_vbz=True, can_hub=True, is_tl=True)
+    e = Employee("L. Ierano", "Lara", 100, can_rx_abo=True, can_vbz=True, can_hub=True, is_tl=True)
     full_week(e)
     employees["Lara"] = e
     
     # Andrea G. - 100%
-    e = Employee("Gygax Andrea", "Andrea G.", 100, can_direkt=True)
+    e = Employee("G. Andrea", "Andrea G.", 100, can_direkt=True)
     full_week(e)
     employees["Andrea G."] = e
     
     # Dipiga - 100%
-    e = Employee("Jeyalingam Dipiga", "Dipiga", 100, can_hub=True)
+    e = Employee("J. Dipiga", "Dipiga", 100, can_hub=True)
     full_week(e)
     employees["Dipiga"] = e
     
     # Isaura - 90%, jeden 2. Mittwoch frei
-    e = Employee("Bohnenblust Isaura", "Isaura", 90, can_rx_abo=True)
+    e = Employee("B. Isaura", "Isaura", 90, can_rx_abo=True)
     full_week(e)
     if is_even_week:
         e.available[(2, 0)] = False
@@ -227,34 +227,34 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Isaura"] = e
     
     # Martina - 80%, jeden Montag frei
-    e = Employee("Martina Pizzi", "Martina", 80, can_rx_abo=True)
+    e = Employee("M. Pizzi", "Martina", 80, can_rx_abo=True)
     full_week(e)
     e.available[(0, 0)] = False
     e.available[(0, 1)] = False
     employees["Martina"] = e
     
     # Alessia - 100%
-    e = Employee("Giombanco Alessia", "Alessia", 100, can_hub=True)
+    e = Employee("G. Alessia", "Alessia", 100, can_hub=True)
     full_week(e)
     employees["Alessia"] = e
     
     # Amra - 100%
-    e = Employee("Imsirovic Amra", "Amra", 100, can_hub=True)
+    e = Employee("I. Amra", "Amra", 100, can_hub=True)
     full_week(e)
     employees["Amra"] = e
     
     # Nina - 100%
-    e = Employee("Hänni Nina", "Nina", 100, can_hub=True, can_vbz=True)
+    e = Employee("H. Nina", "Nina", 100, can_hub=True, can_vbz=True)
     full_week(e)
     employees["Nina"] = e
     
     # Jesika - 100%
-    e = Employee("Bushaj Jesika", "Jesika", 100, can_hub=True)
+    e = Employee("B. Jesika", "Jesika", 100, can_hub=True)
     full_week(e)
     employees["Jesika"] = e
     
     # Brigitte - 70%, Mi/Do/Fr NM frei
-    e = Employee("Siegrist Brigitte", "Brigitte", 70, can_schalter=False, can_scanning=False, can_onb=False)
+    e = Employee("S. Brigitte", "Brigitte", 70, can_schalter=False, can_scanning=False, can_onb=False)
     full_week(e)
     e.available[(2, 1)] = False  # Mi NM
     e.available[(3, 1)] = False  # Do NM
@@ -262,7 +262,7 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Brigitte"] = e
     
     # Florence - 70%, Mi NM + Fr frei
-    e = Employee("Florence Dornbierer", "Florence", 70, can_schalter=False, can_onb=False)
+    e = Employee("D. Florence ", "Florence", 70, can_schalter=False, can_onb=False)
     full_week(e)
     e.available[(2, 1)] = False  # Mi NM
     e.available[(4, 0)] = False  # Fr
@@ -270,7 +270,7 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Florence"] = e
     
     # Corinne - 90%, jeden 2. Freitag frei
-    e = Employee("Eggimann Corinne", "Corinne", 90, can_hub=True, can_schalter=False, can_scanning=False)
+    e = Employee("E. Corinne", "Corinne", 90, can_hub=True, can_schalter=False, can_scanning=False)
     full_week(e)
     if is_even_week:
         e.available[(4, 0)] = False
@@ -278,7 +278,7 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Corinne"] = e
     
     # Saskia - 40%, nur Mi und Fr
-    e = Employee("Schöni Saskia", "Saskia", 40, can_schalter=False, can_scanning=False, can_onb=False)
+    e = Employee("S. Saskia", "Saskia", 40, can_schalter=False, can_scanning=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
@@ -289,7 +289,7 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Saskia"] = e
     
     # Dragi - 60%, Di/Do/Fr hier
-    e = Employee("Milenkovic Dragana", "Dragi", 60, can_hub=True, can_schalter=False, can_scanning=False, can_onb=False)
+    e = Employee("M. Dragana", "Dragi", 60, can_hub=True, can_schalter=False, can_scanning=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
@@ -302,7 +302,7 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Dragi"] = e
     
     # Maria B. - 30%, Mo und Do VM hier
-    e = Employee("Bruzzese Maria", "Maria B.", 30, can_schalter=False, can_scanning=False, can_onb=False)
+    e = Employee("B. Maria", "Maria B.", 30, can_schalter=False, can_scanning=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
@@ -311,7 +311,7 @@ def create_employees(week_number: int) -> Dict[str, Employee]:
     employees["Maria B."] = e
     
     # Andrea A. - 60%, Mo/Di/Mi hier
-    e = Employee("Ackermann Andrea", "Andrea A.", 60, can_direkt=True, can_schalter=False, can_onb=False)
+    e = Employee("A. Andrea", "Andrea A.", 60, can_direkt=True, can_schalter=False, can_onb=False)
     for d in range(5):
         for s in range(2):
             e.available[(d, s)] = False
