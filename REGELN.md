@@ -1,174 +1,119 @@
-# Regeln Arbeitsplan KSC1
+# Regeln Arbeitsplan KSC (Version 7.0, Oktober 2026)
 
-> Diese Datei ist die Single-Source-of-Truth für die Scheduling-Logik.
-> `arbeitskalender.py` implementiert diese Regeln; `REGELN.txt` ist die
-> Plaintext-Variante derselben Information.
-
----
-
-## 1) Tägliche Aufgaben — Übersicht
-
-| Aufgabe | Code | Anzahl / Tag | VM | NM | Berechtigte Personen | Rhythmus |
-|---|---|---|---|---|---|---|
-| Telefon | `TEL` | **Mo VM = 4**, sonst **3 / Halbtag** | ✅ | ✅ | alle verfügbaren; TLs bevorzugt, max. 2× / Woche / TL | täglich, jeder Halbtag |
-| Abklärung | `ABKL` | **2 / Halbtag** | ✅ | ✅ | alle verfügbaren | täglich, VM + NM |
-| Tagespharm | `TAGES PA` | **1 / Tag**, ganzer Tag | ✅ | ✅ (gleiche Person) | nicht TLs, nicht Brigitte / Saskia / Dragi / Maria B. / Andrea A. / Florence | täglich, max. 1× / Person / Woche |
-| Schalter | `ERF7/SCH` | **1 / Tag**, ganzer Tag | ✅ | ✅ (gleiche Person) | siehe §3 (Schalter-Pool) | täglich; alle 2 Wochen pro Person |
-| HUB | `ERF7/HUB` | **2 / Tag** (halbtags) | ✅ (1 Person) | ✅ (andere Person) | Jesika, Dragi, Lara, Corinne, Dipiga, Nina, Amra, Alessia | täglich, VM + NM unterschiedliche Person |
-| ERF8 | `ERF8` | **1 / Tag** | – | ✅ **strikt NM** | alle ausser Maria B., Saskia | täglich, nur Nachmittag (läuft bis 17:00); `ERF8/Q` & `ERF8/HUB` können manuell auch VM gesetzt werden |
-| ERF9 Montag | `ERF9` | 1 ganztags | ✅ | ✅ | **Brigitte** (fix) | jeden Montag |
-| ERF9 Dienstag | `ERF9` / `ERF9/TEL` | VM = `ERF9`, NM = `ERF9/TEL` | ✅ | ✅ | **Dragi** (fix) | jeden Dienstag |
-| ERF9 Mi–Fr | `ERF9` | 1 (VM) | ✅ | – | alle ausser Brigitte, Dragi | Mi / Do / Fr, undefiniert |
-| Postöffnung (PÖ + Scan) | `PO/SCAN` | **1 / Vormittag** | ✅ | – | nicht TLs, nicht Brigitte / Corinne / Maria B. / Saskia / Dragi | jeden Werktag VM |
-| Postöffnung (nur PÖ) | `PO` | **2 / Vormittag** | ✅ | – | nicht TLs | jeden Werktag VM |
-| Scanning Nachmittag | `Scan` | **1 / Nachmittag** | – | ✅ | nicht TLs, nicht Brigitte / Corinne / Maria B. / Saskia / Dragi | jeden Werktag NM |
-| Queue | `ERF7/Q` | **1 / Tag** (implizit über TL-Auffüllung) | ✅ | ✅ | TLs (Silvana, Linda, Lara) | TLs decken Queue ab |
-| Tagesverantwortung | (Header) | 1 / Tag (VM + NM gleiche Person) | ✅ | ✅ | TLs (Silvana, Linda, Lara) im Wechsel | täglich, gleiche Person ganzer Tag |
+> `arbeitskalender.py` setzt diese Regeln um; wer was darf und alle Fixeinsätze
+> stehen in `team.json` (bearbeitbar in der App unter «Team verwalten»).
+> Rotationen werden aus der Kalenderwoche berechnet – keine Zustandsdatei.
 
 ---
 
-## 2) Wöchentliche / spezielle Aufgaben
+## 1) Tägliche Aufgaben
 
-| Aufgabe | Code | Frequenz | VM/NM | Berechtigte Personen | Wann |
-|---|---|---|---|---|---|
-| KGS | `KGS` | 2 × / Woche | VM (Di), NM (Do) | **Dipiga** (fix) | Di VM + Do NM |
-| KSC Spezial | `KSC Spez.` | 2 × / Woche | VM | **Martina** (fix) | Di VM + Do VM |
-| Labor | `ERF5` | 1 × / Woche | NM | **Jesika** und **Dipiga** im Wechsel | Mittwoch NM |
-| RX Abo | `RX Abo` | **2 × / Woche**, halbtags | VM oder NM | Lara, Linda, Isa (Isaura), Martina | 2 Slots / Woche, max. 1 / Tag |
-| HO (Maria) | `HO` | 1 × / Woche | VM | **Maria B.** (fix) | Montag VM |
-| HO/Q (Linda) | `HO/Q` | alle 2 Wochen | VM + NM | **Linda** (fix) | Dienstag ganztags, biweekly |
-| Direktbestellung | (Wochenaufgabe) | 1 × / Woche | – | Andrea A., Andrea G., Silvana im Wechsel | rotierend |
-| ONB | (Wochenaufgabe) | 1 × / Woche | – | Silvana, Linda, Lara, Andrea G., Dipiga, Isaura, Martina, Alessia, Amra, Nina, Jesika, Corinne | rotierend |
-| BTM | (Wochenaufgabe) | 1 × / Woche | – | Jesika, Silvana, Linda, Lara, Dipiga, Isaura | rotierend |
-| Vorbezüge | `VBZ/Q` | – | – | Lara, Nina (berechtigt, nicht fix eingeplant) | bei Bedarf |
+| Aufgabe | Code | Anzahl | VM | NM | Wer | Regel |
+|---|---|---|:-:|:-:|---|---|
+| Telefon | `TEL` | **Mo VM 4**, sonst **3 pro Halbtag** | ✅ | ✅ | alle anwesenden; TL mind. 1× und max. 2× pro Woche (einstellbar); nur-TEL-Personen immer | **nur halbtags** pro Person (VM TEL + NM ABKL ok, nie 2× TEL) |
+| Abklärung | `ABKL` | **2 pro Halbtag** | ✅ | ✅ | alle regulären | **nur halbtags** pro Person |
+| Tagespharma | `TAGES PA` | 1 pro Tag, **ganztags** | ✅ | ✅ | Rolle TPA; keine TL, nicht Corinne / Saskia / Maria B. / Andrea A. / Florence / Brigitte / Dragi | niemand fix, wechselt täglich; NM `TAGES PA/TEL` bei Bedarf / immer / nie (einstellbar) |
+| Schalter | `ERF7/SCH` (oder `ERF4/SCH`, einstellbar) | 1 pro Tag, **ganztags** | ✅ | ✅ | Rolle Schalter (Silvana, Lara, Andrea G., Dipiga, Isaura, Alessia, Amra, Nina, Jesika); Reserve Brigitte, Saskia, Dragi nur, wenn aus der Gruppe niemand frei ist | 2 Gruppen im Wochenwechsel, max. 1× pro Person und Woche |
+| HUB | `ERF7/HUB` | 2 Halbtage pro Tag | ✅ (1 Person) | ✅ (andere Person) | Rolle HUB (Lara, Dipiga, Alessia, Amra, Nina, Jesika, Dragi) | nur mit ERF7 |
+| ERF8 | `ERF8` | 1 pro Tag | – | ✅ | Rolle ERF8 (alle ausser Saskia, Maria B., nur-TEL, Aushilfe) | Nachmittag (bis 17:00) |
+| ERF9 Mo | `ERF9` | ganztags | ✅ | ✅ | **Brigitte** (Fixeinsatz) | |
+| ERF9 Di | `ERF9` / `ERF9/TEL` | ganztags | ✅ | ✅ | **Dragi** (Fixeinsatz, NM mit TEL) | |
+| ERF9 Mi–Fr | `ERF9` | 1 pro Tag, **ganztags** | ✅ | ✅ | Rolle ERF9 (nicht Brigitte, Dragi) | wechselt täglich |
+| Postöffnung + Scan | `PO/SCAN` | 1 pro Vormittag | ✅ | – | **Aushilfe Sarah** täglich; fehlt sie: Rolle PO + Scanning, Di bevorzugt Florence | nie die PHC-Person des Tages |
+| Zusatz-Postöffnung | `PO` | 2 pro Vormittag (einstellbar) | ✅ | – | Rolle PO (nicht TL, nicht Brigitte / Corinne / Saskia / Dragi / Maria B.) | rotierend – niemand jeden Tag |
+| Scanning | `scanning` | Aushilfe täglich NM; Stammteam gelegentlich | ✅ | ✅ | Rolle Scanning (nicht Brigitte / Corinne / Saskia / Dragi / Maria B.) | **nur halbtags** (Ausnahme Aushilfe), max. 2 Halbtage pro Woche, nie die PHC-Person |
+| Queue | `ERF7/Q` | Auffüllung | ✅ | ✅ | TL | |
+| Tagesverantwortung | `TL/Q` (Header-Farbe) | 1 pro Tag, **gleiche TL VM + NM** | ✅ | ✅ | TL im Wechsel (Lara → Silvana → Linda) | TL mit TV hat **keine Ämtli** |
+| PHC-/18-Uhr-Liste | (dunkelblau, NM) | 1 pro Tag | – | ✅ | Mo TL im Wechsel · Di Dipiga · Mi/Do Pool · Fr Corinne / Andrea G. im Wechsel | nie Brigitte, Saskia, Maria B., nur-TEL, Aushilfe; Corinne + Andrea G. nicht Mi/Do; PHC-Person scannt nicht |
 
----
+`PO/TEL` am Nachmittag: wird **nicht** automatisch vergeben (nur Notfall); manuell gesetzt → Hinweis.
 
-## 3) Schalter-Pool
+## 2) Wöchentliche / spezielle Einsätze
 
-| Status | Personen |
-|---|---|
-| **Im Schalter-Pool (alle 2 Wochen dran)** | Silvana, Lara, Andrea G., Dipiga, Isaura, Martina, Alessia, Amra, Nina, Jesika |
-| **Nie Schalter** | Linda, Florence, Corinne, Maria B., Andrea A. |
-| **Nicht strikt alle 2 Wochen (seltener im Pool)** | Brigitte, Saskia, Dragi |
-
-> Rotation: 10 Pool-Personen werden in zwei Gruppen à 5 geteilt; jede Gruppe ist
-> in einer Woche aktiv (= 1 Person ganztags pro Werktag).
-
----
-
-## 4) Ausschlüsse
-
-| Liste | Personen | Bedeutung |
-|---|---|---|
-| Kein Scanning | Brigitte, Corinne, Maria B., Saskia, Dragi | Bekommen weder `PO/SCAN` noch `Scan` zugewiesen |
-| Keine ONB | Brigitte, Florence, Saskia, Dragi, Maria B., Andrea A. | Nicht für die ONB-Wochenaufgabe |
-| Nicht TL | (alle ausser Silvana, Linda, Lara) | Bekommen kein `ERF7/Q` als Default-Auffüllung |
-
----
-
-## 5) Pensen & Verfügbarkeit
-
-| # | Person | Pensum | Wochenverfügbarkeit |
-|---|---|---:|---|
-| 1 | Grossenbacher Silvana (`Silvana`) | 100 % | Mo–Fr ganztags · **TL** |
-| 2 | Rexhaj Majlinda (`Linda`) | 90 % | Mo–Fr ganztags, jeden 2. Freitag frei · **TL** |
-| 3 | Lara Ierano (`Lara`) | 100 % | Mo–Fr ganztags · **TL** |
-| 4 | Gygax Andrea (`Andrea G.`) | 100 % | Mo–Fr ganztags |
-| 5 | Jeyalingam Dipiga (`Dipiga`) | 100 % | Mo–Fr ganztags |
-| 6 | Bohnenblust Isaura (`Isaura`) | 90 % | Mo–Fr ganztags, jeden 2. Mittwoch frei |
-| 7 | Martina Pizzi (`Martina`) | 80 % | Di–Fr ganztags, Montag frei |
-| 8 | Giombanco Alessia (`Alessia`) | 100 % | Mo–Fr ganztags |
-| 9 | Imsirovic Amra (`Amra`) | 100 % | Mo–Fr ganztags |
-| 10 | Hänni Nina (`Nina`) | 100 % | Mo–Fr ganztags |
-| 11 | Bushaj Jesika (`Jesika`) | 100 % | Mo–Fr ganztags |
-| 12 | Siegrist Brigitte (`Brigitte`) | 70 % | Mo–Fr VM + Mo+Di NM (Mi/Do/Fr NM frei) |
-| 13 | Florence Dornbierer (`Florence`) | 70 % | Mo–Do (Mi NM frei) + Freitag frei |
-| 14 | Eggimann Corinne (`Corinne`) | 90 % | Mo–Fr ganztags, jeden 2. Freitag frei |
-| 15 | Schöni Saskia (`Saskia`) | 40 % | nur Mi + Fr (ganztags) |
-| 16 | Milenkovic Dragana (`Dragi`) | 60 % | nur Di, Do, Fr (ganztags) |
-| 17 | Bruzzese Maria (`Maria B.`) | **30 % (effektiv 20 %)** | nur Mo VM + Do VM ⚠ |
-| 18 | Ackermann Andrea (`Andrea A.`) | 60 % | nur Mo, Di, Mi (ganztags) |
-
-> **⚠ Hinweis Maria B.:** Pensum 30 % impliziert 3 Halbtage, aber nur Mo VM
-> und Do VM (= 2 Halbtage = 20 %) sind eingetragen. Inkonsistenz noch nicht
-> aufgelöst – siehe Mail-Abstimmung.
-
----
-
-## 6) Kombinations-Matrix
-
-| Aufgabe | mit `Q` | mit `TEL` | mit `SCH` | mit `HUB` | mit `ABKL` | mit `SCAN` |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| `ERF7` | ✅ | – | ✅ | ✅ | – | – |
-| `ERF8` | ✅ | – | – | (✅) | – | – |
-| `ERF9` | ✅ | ✅ (Di NM) | – | – | – | – |
-| `PO` | ✅ | ✅ | – | – | ✅ | – |
-| `TPA` (`TAGES PA`) | ✅ | ✅ (NM) | – | – | – | – |
-| `Schalter` (`ERF7/SCH`) | – | – | – | – | – | ❌ |
-| `Schalter` (Person ganztags) | – | – | – | – | – | ❌ kein PÖ/Scan |
-| `HUB` (`ERF7/HUB`) | – | – | – | – | – | – |
-
-Legende: ✅ = erlaubt · ❌ = verboten · – = nicht relevant / nicht definiert · (✅) = möglich aber selten.
-
----
-
-## 7) Prioritäts-Reihenfolge im Generator
-
-Der Scheduler arbeitet in dieser Reihenfolge — Aufgaben weiter oben sichern sich Plätze zuerst:
-
-```
-1.  Overrides (Krank, Ferien, Termin) aus Schritt-1-Eingaben
-        ↓
-2.  Fixzuweisungen:
-    – Brigitte Mo ERF9 ganztags
-    – Dragi Di ERF9 VM + ERF9/TEL NM
-    – Maria B. Mo VM HO
-    – Linda Di HO/Q ganztags (alle 2 Wochen)
-    – Dipiga Di VM KGS + Do NM KGS
-    – Martina Di VM + Do VM KSC Spez.
-    – Labor Mi NM (Jesika ↔ Dipiga im Wechsel)
-        ↓
-3.  Schalter ganztags (ERF7/SCH) – aktiver 5er-Pool dieser Woche
-        ↓
-4.  RX Abo (2 Slots / Woche)
-        ↓
-5.  Tagespharm ganztags (TAGES PA) – 1 Person / Tag, max. 1× / Person / Woche
-        ↓
-6.  HUB halbtags (ERF7/HUB) – 1 VM + 1 (andere) NM pro Werktag
-        ↓
-7.  PÖ Vormittag (1 PO/SCAN + 2 PO) und 1 NM Scan
-        ↓
-8.  ERF8 (1 / Tag)
-        ↓
-9.  ERF9 Mi–Fr (1 VM)
-        ↓
-10. TEL füllen (Target: 4 Mo VM, sonst 3)
-        ↓
-11. ABKL füllen (2 / Halbtag)
-        ↓
-12. Restliche freie Slots:
-    – TL → ERF7/Q
-    – Andere VM → PO
-    – Andere NM → ERF7
-        ↓
-13. Tagesverantwortung & PHC-Liste (TL-Auswahl pro Tag)
-        ↓
-14. Wochenaufgaben rotieren (Direkt, ONB, BTM)
-```
-
----
-
-## 8) Abwesenheiten (Schritt 1)
-
-| Eingabe-Typ | Task-Code | Belegt Slots | Wirkung |
+| Einsatz | Code | Wann | Wer |
 |---|---|---|---|
-| Krank | `KRANK` | gewählte Tage/Halbtage | Person fällt aus, blockiert Slot |
-| Ferien | `FERIEN` | gewählte Tage/Halbtage | Person fällt aus, blockiert Slot |
-| Termin | `*<Notiz>` | gewählter Halbtag | Slot wird leer; Notiz erscheint |
-| Home Office | `HO` | gewählte Halbtage | Person macht HO statt Plan-Task |
-| Custom | freier Text | gewählte Halbtage | Beliebige Bezeichnung |
+| KGS | `KGS` | Di VM + Do NM | Dipiga (Fixeinsatz) |
+| Labor | `ERF5` | Mi NM | Jesika / Dipiga im Wechsel |
+| Home Office | `HO` | Mo VM | Maria B. (Mo NM vor Ort) |
+| Home Office | `HO` | Mi VM | Florence (Mi NM frei, Fr anwesend) |
+| Home Office + Queue | `HO/Q` | Di ganztags, ungerade KW | Linda |
+| KSC Spezial | `KSC Spez.` | Di VM + Do VM | Martina (zurzeit inaktiv) |
+| RX Abo | `RX Abo` | 2 Halbtage pro Woche, max. 1 pro Tag | Lara, Linda, Isaura (Martina inaktiv) |
+| Direktbestellung | Wochenaufgabe | 1 Person pro Woche | Silvana, Andrea G., Andrea A. |
+| ONB | Wochenaufgabe | 1 Person pro Woche | Silvana, Linda, Lara, Andrea G., Dipiga, Isaura, Alessia, Amra, Nina, Jesika, Corinne |
+| BTM | Wochenaufgabe | 1 Person pro Woche | Silvana, Linda, Lara, Dipiga, Isaura, Jesika |
+| Vorbezüge | `VBZ` | nicht automatisch | Lara, Nina |
 
-> **Wochen-Range:** Pro Eintrag wird `Anzahl Wochen` (Default 1) eingegeben.
-> Eintrag gilt nur für `[KW_eingabe … KW_eingabe + N − 1]`. Es gibt keine
-> automatische Übernahme auf alle Folgewochen.
+Wochenaufgaben: nie dieselbe Person doppelt; wer die ganze Woche fehlt, wird übersprungen.
+
+## 3) Personen (Stand Oktober 2026, aus `team.json`)
+
+| Kurzname | Anzeige | % | Anwesenheit | Besonderes |
+|---|---|---:|---|---|
+| Silvana | Silvana G. | 100 | Mo–Fr | TL, Direkt |
+| Linda | Linda R. | 90 | Mo–Fr, gerade KW Fr frei | TL, RX Abo, Di HO/Q (ungerade KW), nie Schalter |
+| Lara | Lara I. | 100 | Mo–Fr | TL, RX Abo, HUB, VBZ |
+| Andrea G. | Andrea G. | 100 | Mo–Fr | Direkt, PHC nicht Mi/Do, Fr PHC im Wechsel |
+| Dipiga | Dipiga J. | 100 | Mo–Fr | HUB, KGS Di VM + Do NM, PHC Di, Labor-Wechsel |
+| Isaura | Isaura B. | 90 | Mo–Fr, gerade KW Mi frei | RX Abo |
+| Martina | Martina P. | 80 | Mo frei | **inaktiv** (krank, dann Mutterschutz) |
+| Alessia | Alessia G. | 100 | Mo–Fr | HUB |
+| Amra | Amra I. | 100 | Mo–Fr | HUB |
+| Nina | Nina H. | 100 | Mo–Fr | HUB, VBZ |
+| Jesika | Jesika B. | 100 | Mo–Fr | HUB, Labor-Wechsel |
+| Brigitte | Brigitte S. | 70 | Mi/Do/Fr nur VM | Mo ERF9; Schalter nur als Reserve; kein Scanning/ONB/PO/PHC/TPA |
+| Florence | Florence D. | 90* | Mi nur VM (HO) | Di PO bevorzugt; keine ONB, kein Schalter, kein TPA |
+| Corinne | Corinne E. | 90 | Mo–Fr, gerade KW Fr frei | keine PO/TPA/HUB/Scanning/Schalter; PHC nicht Mi/Do |
+| Saskia | Saskia S. | 40 | nur Mi + Fr | TEL/ABKL/ERF7/ERF9; Schalter nur als Reserve |
+| Dragi | Dragi M. | 60 | nur Di/Do/Fr | Di ERF9 + ERF9/TEL, HUB; Schalter nur als Reserve; kein Scanning/ONB/PO/TPA |
+| Maria B. | Maria B. | 30 | Mo ganz, Do VM | Mo VM HO; keine Rollen |
+| Andrea A. | Andrea A. | 60 | nur Mo/Di/Mi | Direkt; keine ONB, kein Schalter, kein TPA |
+| Manuela | Manuela I. | 80* | Mi + Fr nur VM | **nur TEL** |
+| Maria F. | Maria F. | 80* | Mo frei | **nur TEL** |
+| Sarah | Sarah E. | 100 | Mo–Fr | **Aushilfe**: PO/SCAN VM + scanning NM |
+
+\* Pensum angenommen (noch vom Team zu bestätigen).
+
+BackUp Team (nur manuell): Stephi R. · Sabrina D. (ERP) · Brigitte F. (ERP) · Dominique L. (ERP) · KSC Spezial · KSV
+
+## 4) Reihenfolge im Generator
+
+```
+ 0. Abwesenheiten / Sonderwünsche (Krank, Ferien, Termin, HO, Custom; BackUp-Einträge)
+ 1. Fixeinsätze aus team.json (auch «nur gerade/ungerade KW»)
+ 2. Labor Mi NM (Wechsel)
+ 3. Aushilfe PO/SCAN + scanning · nur-TEL-Personen TEL
+ 4. Tagesverantwortung → TL/Q ganztags
+ 5. PHC-Liste
+ 5b. Telefon-Minimum der TL reservieren
+ 6. Schalter ganztags (aktive Gruppe, dann Reserve, dann andere Gruppe)
+ 7. TAGES PA ganztags
+ 8. ERF9 Mi–Fr ganztags
+ 9. RX Abo
+10. Postöffnung (Ersatz-PO/SCAN, Zusatz-PO, NM-Scan-Ersatz)
+11. ERF8 (NM)
+12. TEL (halbtags, TL bevorzugt, gleichmässig)
+13. ABKL (halbtags, gleichmässig)
+14. HUB (VM + NM, verschiedene Personen)
+15. Rest: ERF7/Q (TL), scanning (gelegentlich), ERF7
+16. Wochenaufgaben Direkt / ONB / BTM
+```
+
+## 5) Abwesenheiten (Schritt 1 der App)
+
+| Grund | Eintrag im Plan | Wirkung |
+|---|---|---|
+| Krank | `KRANK` | Halbtag blockiert, Person zählt als abwesend |
+| Ferien | `FERIEN` | wie Krank |
+| Termin | leer + Notiz in «Bemerkungen» | Halbtag blockiert |
+| Home Office | `HO` | Person arbeitet im HO, bekommt keine andere Aufgabe |
+| Custom | beliebiger Task-Code | z. B. `ERP`, `KSV` für BackUp-Zeilen |
+
+Jeder Eintrag gilt für «Anzahl Wochen» ab der angezeigten KW.
+
+## 6) Regelprüfung nach dem Planen
+
+❌ = harte Regel verletzt (Mindestbesetzung TEL/ABKL, ERF8/ERF9/PO/TAGES PA pro Tag,
+Halbtags-Regeln, PHC-Ausschlüsse, Rollen-Berechtigungen – auch bei manuellen Einträgen),
+⚠️ = Soll-Regel (ERF9/TPA/Schalter halbtags, PO/TEL NM, Scanning-Limit, TL mit Ämtli, TL ohne/zu viel TEL),
+ℹ️ = Vertretung / Rotation (TL abwesend, Schalter-Ersatz aus anderer Gruppe, Wochenaufgabe übersprungen).

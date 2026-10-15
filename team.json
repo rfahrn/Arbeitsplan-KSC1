@@ -1,0 +1,603 @@
+{
+  "_hinweis": "Stammdaten des KSC-Teams. Diese Datei ist die einzige Quelle für Personen, Pensen, Anwesenheiten, Rollen, Fixeinsätze und Rotationen. Bearbeiten über 'Team verwalten' in der App oder direkt hier. Tage: Mo Di Mi Do Fr; Halbtage: ganz | VM | NM | frei; KW-Parität: gerade | ungerade.",
+  "version": "7.0",
+  "regeln": {
+    "tel_montag_vm": 4,
+    "tel_sonst": 3,
+    "abkl_pro_halbtag": 2,
+    "po_zusatz_vm": 2,
+    "hub_pro_tag": 2,
+    "rx_abo_pro_woche": 2,
+    "scan_max_halbtage_pro_woche": 2,
+    "scan_anteil": 0.35,
+    "tl_tel_max_pro_woche": 2,
+    "scan_nm_ersatz_wenn_aushilfe_fehlt": true,
+    "tl_tel_min_pro_woche": 1,
+    "schalter_code": "ERF7/SCH",
+    "schalter_reserve_modus": "vor der anderen Gruppe",
+    "tpa_tel_nm": "bei Bedarf"
+  },
+  "rotation": {
+    "tv_reihenfolge": [
+      "Lara",
+      "Silvana",
+      "Linda"
+    ],
+    "tv_farben": {
+      "Lara": "00B050",
+      "Silvana": "FF6600",
+      "Linda": "FFFF00"
+    },
+    "phc_montag_tl": [
+      "Silvana",
+      "Linda",
+      "Lara"
+    ],
+    "phc_fix": {
+      "Di": "Dipiga"
+    },
+    "phc_freitag_wechsel": [
+      "Corinne",
+      "Andrea G."
+    ],
+    "phc_tag_ausschluss": {
+      "Mi": [
+        "Corinne",
+        "Andrea G."
+      ],
+      "Do": [
+        "Corinne",
+        "Andrea G."
+      ]
+    },
+    "labor_mi_nm": [
+      "Jesika",
+      "Dipiga"
+    ],
+    "po_dienstag_bevorzugt": "Florence",
+    "offset": {
+      "tv": 0,
+      "phc_montag": 0,
+      "phc_freitag": 0,
+      "schalter": 0,
+      "labor": 0,
+      "Direkt": 0,
+      "ONB": 0,
+      "BTM": 0
+    }
+  },
+  "mitarbeiter": [
+    {
+      "short": "Silvana",
+      "name": "Silvana G.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": true,
+      "kann": [
+        "Direkt",
+        "ONB",
+        "BTM",
+        "Schalter",
+        "Scanning",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "Teamleitung"
+    },
+    {
+      "short": "Linda",
+      "name": "Linda R.",
+      "pct": 90,
+      "aktiv": true,
+      "tl": true,
+      "kann": [
+        "RX Abo",
+        "ONB",
+        "BTM",
+        "Scanning",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": {
+        "kw": "gerade",
+        "tage": {
+          "Fr": "ganz"
+        }
+      },
+      "fix": [
+        {
+          "tag": "Di",
+          "halbtag": "ganz",
+          "task": "HO/Q",
+          "kw": "ungerade"
+        }
+      ],
+      "bemerkung": "Teamleitung; jeden 2. Freitag frei; alle 2 Wochen Di Homeoffice (HO/Q); nie Schalter"
+    },
+    {
+      "short": "Lara",
+      "name": "Lara I.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": true,
+      "kann": [
+        "RX Abo",
+        "VBZ",
+        "HUB",
+        "ONB",
+        "BTM",
+        "Schalter",
+        "Scanning",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "Teamleitung"
+    },
+    {
+      "short": "Andrea G.",
+      "name": "Andrea G.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "Direkt",
+        "ONB",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "PHC-Liste nicht Mi/Do (siehe rotation.phc_tag_ausschluss); Fr im Wechsel mit Corinne"
+    },
+    {
+      "short": "Dipiga",
+      "name": "Dipiga J.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "HUB",
+        "ONB",
+        "BTM",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Di",
+          "halbtag": "VM",
+          "task": "KGS"
+        },
+        {
+          "tag": "Do",
+          "halbtag": "NM",
+          "task": "KGS"
+        }
+      ],
+      "bemerkung": "KGS Di VM + Do NM; PHC-Liste Dienstag fix; Labor Mi NM im Wechsel mit Jesika"
+    },
+    {
+      "short": "Isaura",
+      "name": "Isaura B.",
+      "pct": 90,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "RX Abo",
+        "ONB",
+        "BTM",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": {
+        "kw": "gerade",
+        "tage": {
+          "Mi": "ganz"
+        }
+      },
+      "fix": [],
+      "bemerkung": "jeden 2. Mittwoch frei"
+    },
+    {
+      "short": "Martina",
+      "name": "Martina P.",
+      "pct": 80,
+      "aktiv": false,
+      "tl": false,
+      "kann": [
+        "RX Abo",
+        "ONB",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {
+        "Mo": "frei"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Di",
+          "halbtag": "VM",
+          "task": "KSC Spez."
+        },
+        {
+          "tag": "Do",
+          "halbtag": "VM",
+          "task": "KSC Spez."
+        }
+      ],
+      "bemerkung": "Vorerst nicht eingeplant: krank, anschliessend Mutterschutz (Stand Okt 2026). Rückkehr = aktiv setzen."
+    },
+    {
+      "short": "Alessia",
+      "name": "Alessia G.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "HUB",
+        "ONB",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": ""
+    },
+    {
+      "short": "Amra",
+      "name": "Amra I.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "HUB",
+        "ONB",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": ""
+    },
+    {
+      "short": "Nina",
+      "name": "Nina H.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "HUB",
+        "VBZ",
+        "ONB",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": ""
+    },
+    {
+      "short": "Jesika",
+      "name": "Jesika B.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "HUB",
+        "ONB",
+        "BTM",
+        "Schalter",
+        "Scanning",
+        "PO",
+        "TPA",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "Labor Mi NM im Wechsel mit Dipiga"
+    },
+    {
+      "short": "Brigitte",
+      "name": "Brigitte S.",
+      "pct": 70,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "ERF8",
+        "Schalter-Reserve"
+      ],
+      "anwesend": {
+        "Mi": "VM",
+        "Do": "VM",
+        "Fr": "VM"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Mo",
+          "halbtag": "ganz",
+          "task": "ERF9"
+        }
+      ],
+      "bemerkung": "Mo ERF9 ganztags; kein Scanning, keine ONB, Schalter nur als Reserve, keine PO, kein 18-Uhr-Dienst"
+    },
+    {
+      "short": "Florence",
+      "name": "Florence D.",
+      "pct": 90,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "Scanning",
+        "PO",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {
+        "Mi": "VM"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Mi",
+          "halbtag": "VM",
+          "task": "HO"
+        }
+      ],
+      "bemerkung": "Mi VM Homeoffice, Mi NM frei, Fr anwesend (seit Okt 2026); Pensum angenommen; Di bevorzugt PO; keine ONB, kein Schalter"
+    },
+    {
+      "short": "Corinne",
+      "name": "Corinne E.",
+      "pct": 90,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "ONB",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": {
+        "kw": "gerade",
+        "tage": {
+          "Fr": "ganz"
+        }
+      },
+      "fix": [],
+      "bemerkung": "jeden 2. Freitag frei; keine PO, kein TAGES PA, kein HUB, kein Scanning, kein Schalter; PHC nicht Mi/Do, Fr im Wechsel mit Andrea G."
+    },
+    {
+      "short": "Saskia",
+      "name": "Saskia S.",
+      "pct": 40,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "ERF9",
+        "Schalter-Reserve"
+      ],
+      "anwesend": {
+        "Mo": "frei",
+        "Di": "frei",
+        "Do": "frei"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "nur Mi + Fr; kein Scanning, keine ONB, Schalter nur als Reserve, keine PO, kein TAGES PA, kein 18-Uhr-Dienst, kein ERF8"
+    },
+    {
+      "short": "Dragi",
+      "name": "Dragi M.",
+      "pct": 60,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "HUB",
+        "PHC",
+        "ERF8",
+        "Schalter-Reserve"
+      ],
+      "anwesend": {
+        "Mo": "frei",
+        "Mi": "frei"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Di",
+          "halbtag": "VM",
+          "task": "ERF9"
+        },
+        {
+          "tag": "Di",
+          "halbtag": "NM",
+          "task": "ERF9/TEL"
+        }
+      ],
+      "bemerkung": "nur Di/Do/Fr; Di ERF9 ganztags (NM mit TEL); kein Scanning, keine ONB, Schalter nur als Reserve, keine PO"
+    },
+    {
+      "short": "Maria B.",
+      "name": "Maria B.",
+      "pct": 30,
+      "aktiv": true,
+      "tl": false,
+      "kann": [],
+      "anwesend": {
+        "Di": "frei",
+        "Mi": "frei",
+        "Do": "VM",
+        "Fr": "frei"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Mo",
+          "halbtag": "VM",
+          "task": "HO"
+        }
+      ],
+      "bemerkung": "Mo VM Homeoffice, Mo NM vor Ort, Do VM; keine PO, kein Scanning, keine ONB, kein 18-Uhr-Dienst"
+    },
+    {
+      "short": "Andrea A.",
+      "name": "Andrea A.",
+      "pct": 60,
+      "aktiv": true,
+      "tl": false,
+      "kann": [
+        "Direkt",
+        "Scanning",
+        "PO",
+        "PHC",
+        "ERF8",
+        "ERF9"
+      ],
+      "anwesend": {
+        "Do": "frei",
+        "Fr": "frei"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "nur Mo/Di/Mi; keine ONB, kein Schalter, kein TAGES PA"
+    },
+    {
+      "short": "Manuela",
+      "name": "Manuela I.",
+      "pct": 80,
+      "aktiv": true,
+      "tl": false,
+      "nur_tel": true,
+      "kann": [],
+      "anwesend": {
+        "Mi": "VM",
+        "Fr": "VM"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "vorerst nur TEL; Mi NM + Fr NM frei; Pensum angenommen"
+    },
+    {
+      "short": "Maria F.",
+      "name": "Maria F.",
+      "pct": 80,
+      "aktiv": true,
+      "tl": false,
+      "nur_tel": true,
+      "kann": [],
+      "anwesend": {
+        "Mo": "frei"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "vorerst nur TEL; Montag frei; Pensum angenommen"
+    },
+    {
+      "short": "Sarah",
+      "name": "Sarah E.",
+      "pct": 100,
+      "aktiv": true,
+      "tl": false,
+      "aushilfe": true,
+      "kann": [
+        "Scanning",
+        "PO"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "bemerkung": "Aushilfe: täglich PO/SCAN am Vormittag, scanning am Nachmittag; keine anderen Rollen"
+    }
+  ],
+  "backup_team": [
+    {
+      "short": "Stephi",
+      "name": "Stephi R.",
+      "standard": ""
+    },
+    {
+      "short": "Sabrina D.",
+      "name": "Sabrina D.",
+      "standard": "ERP"
+    },
+    {
+      "short": "Brigitte F.",
+      "name": "Brigitte F.",
+      "standard": "ERP"
+    },
+    {
+      "short": "Dominique L.",
+      "name": "Dominique L.",
+      "standard": "ERP"
+    },
+    {
+      "short": "KSC Spezial",
+      "name": "KSC Spezial",
+      "standard": ""
+    },
+    {
+      "short": "KSV",
+      "name": "KSV",
+      "standard": ""
+    }
+  ]
+}
