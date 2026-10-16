@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Arbeitsplan KSC · KSV – Streamlit-App (Version 8.0, Oktober 2026)
+Arbeitsplan KSC · KSV – Streamlit-App (Version 8.2, Oktober 2026)
 ================================================================
 Eine App für zwei Teams mit denselben Funktionen. Oben links wird das Team
 gewählt (KSC / KSV); jedes Team hat eigene Stammdaten, Regeln und
@@ -10,6 +10,9 @@ Abwesenheiten:
   mehrere Wochen).
 - Schritt 2 «Ergebnis»: Wochenplan mit Regelprüfung, Tagesübersicht,
   Plan-Editor und Excel-Download.
+- «📆 Jahresplan»: Ferien und freie Tage von–bis eintragen, Feiertage
+  festlegen, Übersicht übers ganze Jahr (wer fehlt wann, geht der Plan auf?).
+  Alles fliesst automatisch in jeden Wochenplan ein.
 - «Team & Regeln»: Personen, Wer darf was, feste Einsätze und Regeln – ohne
   Code, gespeichert in team.json (KSC) bzw. team_ksv.json (KSV).
 
@@ -33,12 +36,13 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import inspect
 import json
 import os
 import sys
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from types import ModuleType
@@ -51,6 +55,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 import arbeitskalender as ak  # noqa: E402
+import feiertage as ft  # noqa: E402
 import teamplaner as tp  # noqa: E402
 from arbeitskalender import (  # noqa: E402
     DAYS, DAY_KEYS, HALBTAG_WERTE, NUR_MANUELL, ROLLEN, SCHALTER_CODES,
@@ -303,6 +308,36 @@ table.roles td.open { color: var(--warn); font-weight: 700; }
 .explain { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--team); border-radius: 10px;
   padding: 10px 14px; font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
 .explain ol { margin: 4px 0 0; padding-left: 20px; }
+
+.entry-dot.Feiertag { background: #a855f7; }
+.entry-tag { margin-left: auto; font-size: 13px; cursor: help; }
+.fe-row { background: #faf5ff; border-color: #e9d5ff; margin-bottom: 4px; }
+.fe-pill { display: inline-block; margin-top: 6px; padding: 3px 9px; background: #f3e8ff; border: 1px solid #e9d5ff;
+  border-radius: 999px; font-size: 11px; font-weight: 600; color: #6b21a8; text-transform: none; letter-spacing: 0; }
+
+.jp-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.jp-wrap.rtl { direction: rtl; }          /* schmaler Bildschirm, zweite Jahreshälfte: rechts beginnen */
+.jp-wrap.rtl table.jp { direction: ltr; }
+table.jp { border-collapse: separate; border-spacing: 0; font-size: 11px; width: 100%; }
+table.jp th, table.jp td { border-bottom: 1px solid var(--border); text-align: center; padding: 2px 0; min-width: 17px;
+  height: 24px; white-space: nowrap; }
+table.jp th { color: var(--text-mute); font-weight: 600; font-size: 9.5px; background: var(--surface-2); }
+table.jp th.jp-month { color: var(--text-dim); font-weight: 700; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .6px; text-align: left; padding-left: 4px; }
+table.jp .ms { border-left: 1px solid var(--border-2); }
+table.jp .jp-name { text-align: left; padding: 2px 10px; position: sticky; left: 0; background: var(--surface);
+  font-weight: 600; color: var(--text); z-index: 1; min-width: 108px; border-right: 1px solid var(--border); }
+table.jp thead .jp-name { background: var(--surface-2); color: var(--text-mute); font-size: 10px; }
+table.jp tr.jp-fe td { background: #fdfaff; }
+table.jp tr.jp-status td { border-top: 2px solid var(--border); border-bottom: none; }
+table.jp .past { opacity: .35; }
+table.jp th.sel, table.jp td.sel { background: var(--team-soft) !important; }
+table.jp th.sel { color: var(--team); font-weight: 800; }
+.jp-cell { display: inline-block; min-width: 16px; padding: 2px 1px; border-radius: 4px; font-weight: 700; font-size: 9.5px;
+  line-height: 1.3; letter-spacing: -.2px; }
+.jp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.jp-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12px; color: var(--text-dim); align-items: center; }
+.jp-legend .jp-cell { min-width: 22px; text-align: center; }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -424,6 +459,7 @@ def get_week_info(offset: int = 0) -> dict:
         "widx": ak.week_index(monday), "is_even": kw % 2 == 0,
         "monday_str": monday.strftime("%d.%m.%Y"), "friday_str": friday.strftime("%d.%m.%Y"),
         "two_week_notes": E.two_week_notes(kw, ts["cfg"]),
+        "feiertage": ft.pro_tag(ft.woche(ts["feiertage"], monday)),   # {Tag: "Weihnachten"}
     }
 
 
@@ -442,11 +478,17 @@ def entry_active(entry: dict, widx: int) -> bool:
     return start <= widx < start + weeks
 
 
+def kw_range_label(von: date, bis: date) -> str:
+    """'KW 44', 'KW 52–53' bzw. über den Jahreswechsel 'KW 53 – KW 1'."""
+    (y0, k0, _), (y1, k1, _) = von.isocalendar(), bis.isocalendar()
+    if (y0, k0) == (y1, k1):
+        return f"KW {k0}"
+    return f"KW {k0}–{k1}" if y0 == y1 else f"KW {k0} – KW {k1}"
+
+
 def kw_label(jahr: int, kw: int, weeks: int) -> str:
-    if weeks <= 1:
-        return f"KW {kw}"
-    end = date.fromisocalendar(jahr, kw, 1) + timedelta(weeks=weeks - 1)
-    return f"KW {kw}–{end.isocalendar()[1]}"
+    start = date.fromisocalendar(jahr, kw, 1)
+    return kw_range_label(start, start + timedelta(weeks=max(1, weeks) - 1))
 
 
 def entry_kw_label(entry: dict) -> str:
@@ -463,6 +505,67 @@ def days_label(days: list[int]) -> str:
 
 def slot_label(slots: list[int]) -> str:
     return "ganzer Tag" if len(slots) == 2 else ("Vormittag" if slots[0] == 0 else "Nachmittag")
+
+
+# Einträge gibt es in zwei Formen (beide in abwesenheiten*.json):
+#  - Schritt 1: Wochentage ("days") ab einer KW ("jahr", "kw_start") für "weeks" Wochen
+#  - Jahresplan: Zeitraum "von"–"bis" (Wochenenden und Feiertage zählen nicht);
+#    "days" ist leer, jahr/kw_start/weeks beschreiben nur die betroffenen Wochen
+WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+
+def _as_date(x) -> date:
+    return x.date() if isinstance(x, datetime) else x
+
+
+def datum_label(d: date, mit_jahr: bool = False) -> str:
+    return f"{WOCHENTAGE[d.weekday()]} {d.day}.{d.month}." + (str(d.year) if mit_jahr else "")
+
+
+def range_label(von: date, bis: date) -> str:
+    if von == bis:
+        return datum_label(von, True)
+    return f"{datum_label(von, von.year != bis.year)} – {datum_label(bis, True)}"
+
+
+def entry_range(entry: dict) -> tuple[date, date] | None:
+    """(von, bis) bei Einträgen aus dem Jahresplan, sonst None."""
+    if not entry.get("von"):
+        return None
+    try:
+        von = date.fromisoformat(str(entry["von"])[:10])
+        bis = date.fromisoformat(str(entry.get("bis") or entry["von"])[:10])
+    except ValueError:
+        return None
+    return von, max(von, bis)
+
+
+def entry_days(entry: dict, monday) -> list[int]:
+    """Welche Tage (0 = Mo … 4 = Fr) der Woche ab `monday` betrifft der Eintrag?"""
+    monday = _as_date(monday)
+    rng = entry_range(entry)
+    if rng:
+        return [d for d in range(5) if rng[0] <= monday + timedelta(days=d) <= rng[1]]
+    return sorted(entry.get("days", [])) if entry_active(entry, ak.week_index(monday)) else []
+
+
+def entry_span(entry: dict) -> tuple[date, date]:
+    """Erster und letzter betroffener Tag – zum Sortieren, Aufräumen und für den Jahresplan."""
+    rng = entry_range(entry)
+    if rng:
+        return rng
+    days = sorted(entry.get("days", [])) or [0, 4]
+    start = date(2024, 1, 1) + timedelta(weeks=entry_widx_start(entry))
+    weeks = max(1, int(entry.get("weeks", 1)))
+    return start + timedelta(days=days[0]), start + timedelta(weeks=weeks - 1, days=days[-1])
+
+
+def entry_when_label(entry: dict) -> str:
+    slots = f" ({slot_label(entry['slots'])})"
+    rng = entry_range(entry)
+    if rng:
+        return f"{range_label(*rng)}{slots} · {kw_range_label(*rng)}"
+    return f"{days_label(entry['days'])}{slots} · {entry_kw_label(entry)}"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -517,32 +620,43 @@ def write_local(path: Path, content: str) -> tuple[bool, str]:
         return False, f"{path.name} konnte nicht geschrieben werden: {exc}"
 
 
-def entries_json(entries: list[dict]) -> str:
-    return json.dumps({"_hinweis": "Abwesenheiten/Sonderwünsche der App (automatisch gepflegt)",
-                       "entries": entries}, ensure_ascii=False, indent=2) + "\n"
+def entries_json(entries: list[dict], feiertage: dict) -> str:
+    return json.dumps({"_hinweis": "Abwesenheiten, Sonderwünsche und Feiertage der App (automatisch gepflegt)",
+                       "entries": entries, "feiertage": ft.normalize(feiertage)}, ensure_ascii=False, indent=2) + "\n"
+
+
+def absences_json() -> str:
+    return entries_json(ts["entries"], ts["feiertage"])
+
+
+def persist_entries() -> None:
+    """Einträge und Feiertage sofort lokal sichern – ins GitHub-Repo erst mit «Speichern»."""
+    write_local(T.absence_path, absences_json())
 
 
 def save_everything(push_github: bool) -> list[tuple[bool, str]]:
     msgs = []
     cfg_json = E.config_to_json(ts["cfg"])
     msgs.append(write_local(T.config_path, cfg_json))
-    msgs.append(write_local(T.absence_path, entries_json(ts["entries"])))
+    msgs.append(write_local(T.absence_path, absences_json()))
     if push_github:
         msgs.append(github_put(T.config_path.name, cfg_json, f"{T.config_path.name} über die App aktualisiert ({TEAM})"))
-        msgs.append(github_put(T.absence_path.name, entries_json(ts["entries"]),
-                               f"Abwesenheiten {TEAM} über die App aktualisiert"))
+        msgs.append(github_put(T.absence_path.name, absences_json(),
+                               f"Abwesenheiten und Feiertage {TEAM} über die App aktualisiert"))
     ts["cfg_saved_json"] = cfg_json
-    ts["entries_saved_json"] = entries_json(ts["entries"])
+    ts["entries_saved_json"] = absences_json()
     return msgs
 
 
-def load_entries_from_disk(path: Path) -> list[dict]:
+def load_absences(path: Path) -> tuple[list[dict], dict]:
+    """Einträge und Feiertage aus abwesenheiten*.json – fehlt die Datei: keine Einträge, Standard-Feiertage."""
+    data = {}
     if path.exists():
         try:
-            return list(json.loads(path.read_text(encoding="utf-8")).get("entries", []))
+            data = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            return []
-    return []
+            data = {}
+    return list(data.get("entries", [])), ft.normalize(data.get("feiertage"))
 
 
 def replace_cfg(new_cfg: dict) -> None:
@@ -562,13 +676,15 @@ if TEAM not in st.session_state.teams:
     except FileNotFoundError as exc:
         st.error(str(exc))
         st.stop()
-    _entries = load_entries_from_disk(T.absence_path)
+    _entries, _feiertage = load_absences(T.absence_path)
     st.session_state.teams[TEAM] = {
         "cfg": _cfg, "cfg_saved_json": E.config_to_json(_cfg), "cfg_version": 0,
-        "entries": _entries, "entries_saved_json": entries_json(_entries),
-        "result": None, "sched": None,
+        "entries": _entries, "feiertage": _feiertage, "entries_saved_json": entries_json(_entries, _feiertage),
+        "fe_version": 0, "result": None, "sched": None,
     }
 ts: dict = st.session_state.teams[TEAM]
+ts.setdefault("feiertage", ft.default())   # Sitzung aus einer älteren Version
+ts.setdefault("fe_version", 0)
 
 st.session_state.setdefault("week_offset", 0)
 if st.session_state.week_offset not in range(-1, 53):
@@ -579,7 +695,7 @@ if not FIXED_TEAM and not TEAM_BIND and st.query_params.get("team") != TEAM:
     st.query_params["team"] = TEAM
 
 cfg_dirty = E.config_to_json(ts["cfg"]) != ts["cfg_saved_json"]
-entries_dirty = entries_json(ts["entries"]) != ts["entries_saved_json"]
+entries_dirty = absences_json() != ts["entries_saved_json"]
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -631,21 +747,20 @@ def refresh_result_from_sched(sched) -> None:
     res.update(_team_details(sched))
 
 
-def run_generation() -> None:
+def week_inputs(monday) -> dict:
+    """Einträge (Schritt 1 und Jahresplan) und Feiertage einer Woche → Eingaben für build_schedule.
+    Feiertage gehen vor: an diesen Halbtagen zählt kein Eintrag."""
     cfg = ts["cfg"]
-    info = get_week_info(st.session_state.week_offset)
-    kw, monday, widx = info["kw"], info["monday"], info["widx"]
-
-    employees = E.create_employees(kw, cfg)
+    employees = E.create_employees(_as_date(monday).isocalendar()[1], cfg)
     backups = set(backup_shorts())
-    overrides, extra_notes, absences = {}, {}, []
+    fe = ft.woche(ts["feiertage"], monday)
+    overrides, notes, arten, details = {}, {}, {}, {}
 
     for entry in ts["entries"]:
-        if not entry_active(entry, widx):
-            continue
-        name = entry["name"]
+        days = entry_days(entry, monday)
+        name = entry.get("name", "")
         is_backup = name in backups
-        if name not in employees and not is_backup:
+        if not days or (name not in employees and not is_backup):
             continue
         art = entry.get("type", "Custom")
         code = T.codes.get(art, "CUSTOM")
@@ -657,22 +772,58 @@ def run_generation() -> None:
             label = task or "HO"
         else:
             label = code
-        for day in entry["days"]:
+        hit = False
+        for day in days:
             for slot in entry["slots"]:
+                if (day, slot) in fe:
+                    continue
                 if is_backup:
                     overrides[(name, day, slot)] = label
                     continue
                 if employees[name].is_available(day, slot):
                     overrides[(name, day, slot)] = label
+                    arten[(name, day, slot)] = art
+                    hit = True
                     if note and code != "TERMIN" and note != task:
-                        extra_notes[(name, day, slot)] = note
-                    if art in ABWESEND_ARTEN or label.startswith("*"):
-                        absences.append((name, day, slot))
+                        notes[(name, day, slot)] = note
+        if hit:
+            what = GRUENDE.get(art, (art, ""))[0] + (f" «{task}»" if art == "Custom" and task else "")
+            half = "" if len(entry["slots"]) == 2 else f" {SLOT_KEYS[entry['slots'][0]]}"
+            details.setdefault(name, []).append(f"{what} {days_label(days)}{half}")
 
-    warnings = E.check_rule_impact(absences, employees, cfg) if absences else []
-    sched = E.build_schedule(kw, monday, overrides, cfg=cfg)
-    for key, n in extra_notes.items():
+    halbtage: dict[str, dict[str, int]] = {}   # Person → Art → Halbtage (für den Jahresplan)
+    for (name, _d, _s), art in arten.items():
+        halbtage.setdefault(name, {})
+        halbtage[name][art] = halbtage[name].get(art, 0) + 1
+    absences = sorted(k for k, art in arten.items()
+                      if art in ABWESEND_ARTEN or str(overrides.get(k, "")).startswith("*"))
+    return {"employees": employees, "overrides": overrides, "notes": notes, "absences": absences,
+            "feiertage": fe, "halbtage": halbtage, "details": details}
+
+
+def plan_fp(inp: dict) -> str:
+    """Fingerabdruck der Eingaben einer Woche – ändert er sich, ist ein erstellter Plan veraltet."""
+    return hashlib.md5(repr((sorted(inp["overrides"].items()), sorted(inp["notes"].items()),
+                             sorted(inp["feiertage"].items()))).encode("utf-8")).hexdigest()
+
+
+def build_week(monday) -> tuple:
+    """Plan einer Woche mit allen Einträgen und Feiertagen: (sched, Warnungen, Eingaben)."""
+    cfg = ts["cfg"]
+    inp = week_inputs(monday)
+    sched = E.build_schedule(_as_date(monday).isocalendar()[1], monday, inp["overrides"], cfg=cfg,
+                             feiertage=inp["feiertage"])
+    for key, n in inp["notes"].items():
         sched.notes[key] = n
+    warnings = E.check_rule_impact(inp["absences"], inp["employees"], cfg) if inp["absences"] else []
+    return sched, warnings, inp
+
+
+def run_generation() -> None:
+    cfg = ts["cfg"]
+    info = get_week_info(st.session_state.week_offset)
+    kw, monday = info["kw"], info["monday"]
+    sched, warnings, inp = build_week(monday)
 
     rows, backup_rows = build_rows(sched)
     res = {
@@ -685,6 +836,7 @@ def run_generation() -> None:
         "issues": E.validate_schedule(sched),
         "rows": rows, "backup_rows": backup_rows,
         "config_problems": E.validate_config(cfg),
+        "feiertage": ft.pro_tag(inp["feiertage"]), "fp": plan_fp(inp),
     }
     if IS_KSC:
         res.update({
@@ -720,14 +872,18 @@ def generate_now() -> None:
 
 info = get_week_info(st.session_state.week_offset)
 
-# Plan einer anderen KW (Wochenwechsel, Teamwechsel) neu erzeugen, damit Kopf und Plan zusammenpassen
-if (st.session_state.step == 2 and ts["result"] is not None
-        and (ts["result"]["iso_year"], ts["result"]["kw"]) != (info["iso_year"], info["kw"])):
-    try:
-        run_generation()
-    except Exception as exc:  # z. B. defekte Konfiguration – dann zurück zu Schritt 1
-        ts["result"] = None
-        st.error(f"Fehler beim Generieren: {exc}")
+# Plan neu erzeugen, wenn er nicht zur gewählten KW passt (Wochen-/Teamwechsel) oder sich die Einträge bzw.
+# Feiertage dieser Woche seither geändert haben – sonst bleibt er stehen (auch mit Änderungen von Hand)
+if st.session_state.step == 2 and ts["result"] is not None:
+    _andere_kw = (ts["result"]["iso_year"], ts["result"]["kw"]) != (info["iso_year"], info["kw"])
+    if _andere_kw or ts["result"].get("fp") != plan_fp(week_inputs(info["monday"])):
+        try:
+            run_generation()
+            if not _andere_kw:
+                st.toast(f"Plan KW {info['kw']} neu erstellt – Einträge oder Feiertage haben sich geändert.", icon="🔄")
+        except Exception as exc:  # z. B. defekte Konfiguration – dann zurück zu Schritt 1
+            ts["result"] = None
+            st.error(f"Fehler beim Generieren: {exc}")
 if st.session_state.step == 2 and ts["result"] is None:   # z. B. Teamwechsel zu einem Team ohne Plan
     st.session_state.step = 1
 
@@ -804,7 +960,7 @@ with st.container(key="topbar"):
             generate_now()
     # Zeile 2 – die Schritte wie Reiter
     with st.container(key="stepbar"):
-        s1, s2, s3, _ = st.columns([1.6, 1.6, 2.1, 4.7], vertical_alignment="center")
+        s1, s2, s4, s3, _ = st.columns([1.6, 1.6, 1.7, 2.1, 3.0], vertical_alignment="center")
         step = st.session_state.step
         s1.button("● 1  Planung" if step == 1 else "1  Planung", key="step1", width="stretch",
                   type="primary" if step == 1 else "secondary", on_click=_goto, args=(1,),
@@ -814,6 +970,9 @@ with st.container(key="topbar"):
                   on_click=_goto, args=(2,),
                   help="Wochenplan ansehen, anpassen, Excel herunterladen" if ts["result"] is not None
                   else "Zuerst «Plan generieren»")
+        s4.button("📆  Jahresplan", key="step4", width="stretch", type="primary" if step == 4 else "secondary",
+                  on_click=_goto, args=(4,),
+                  help="Ferien und Feiertage fürs ganze Jahr – fliessen automatisch in jeden Wochenplan")
         s3.button("⚙  Team & Regeln" + ("  •" if cfg_dirty else ""), key="step3", width="stretch",
                   type="primary" if step == 3 else "secondary", on_click=_goto, args=(3,),
                   help="Personen, wer darf was, feste Einsätze und Regeln" +
@@ -826,7 +985,8 @@ with st.container(key="topbar"):
 
 n_active = len(active_shorts())
 n_total = len(ts["cfg"]["mitarbeiter"])
-notes_str = " · ".join(info["two_week_notes"]) or "keine Besonderheiten im 2-Wochen-Rhythmus"
+notes_str = " · ".join([f"🎉 {DAY_KEYS[d]} {t}" for d, t in info["feiertage"].items()] + info["two_week_notes"]) \
+    or "keine Besonderheiten im 2-Wochen-Rhythmus"
 storage = []
 if cfg_dirty:
     storage.append("Team & Regeln: ungespeichert")
@@ -835,7 +995,7 @@ if entries_dirty:
 storage_html = (f'<div class="info-pill" style="margin-left:12px; background:var(--warn-soft); '
                 f'border-color:rgba(217,119,6,.3); color:#78350f;"><span class="ico" style="background:var(--warn);">!</span>'
                 f'<span>{html_escape(" · ".join(storage))}</span></div>') if storage else ""
-n_week = sum(1 for e in ts["entries"] if entry_active(e, info["widx"]))
+n_week = sum(1 for e in ts["entries"] if entry_days(e, info["monday"]))
 st.markdown(
     f"""
     <div class="stats-strip">
@@ -844,7 +1004,7 @@ st.markdown(
       <div class="stat-item"><div class="lbl">Woche</div><div class="val">KW {info['kw']} <small>{"gerade" if info["is_even"] else "ungerade"} · {info['monday_str']} – {info['friday_str']}</small></div></div>
       <div class="stat-divider"></div>
       <div class="stat-item"><div class="lbl">Einträge KW {info['kw']}</div><div class="val">{n_week} <small>Abwesenheiten / Wünsche</small></div></div>
-      <div class="info-pill" title="2-Wochen-Rhythmus in dieser KW"><span class="ico">i</span><span>{html_escape(notes_str)}</span></div>
+      <div class="info-pill" title="Feiertage und 2-Wochen-Rhythmus in dieser KW"><span class="ico">i</span><span>{html_escape(notes_str)}</span></div>
       {storage_html}
     </div>
     """,
@@ -891,7 +1051,8 @@ HILFE = {
         ("korrigieren, wer diese Woche TV, 18-Uhr-Liste, Labor oder eine Wochenaufgabe hat",
          "🔄 Rotationen → bei «diese Woche» die richtige Person wählen; die Folgewochen ergeben sich daraus."),
         ("die Anzahl Personen für TEL, ABKL, PO, HUB, RX Abo … ändern", "⚖️ Regeln"),
-        ("eine einmalige Abwesenheit oder einen Sonderwunsch erfassen", "Nicht hier – in Schritt 1 «Planung»."),
+        ("eine einmalige Abwesenheit oder einen Sonderwunsch erfassen",
+         "Nicht hier – in Schritt 1 «Planung» (eine Woche) oder im 📆 Jahresplan (Ferien von–bis, Feiertage)."),
     ],
     "KSV": [
         ("eine neue Person aufnehmen",
@@ -909,7 +1070,8 @@ HILFE = {
         ("einen festen Einsatz eintragen (z. B. Quality Di VM)", "📌 Feste Einsätze → oben hinzufügen."),
         ("Arbeitszeiten im Plan anzeigen (z. B. «12-16» im Wochenwechsel)",
          "📌 Feste Einsätze → Einsatz «– (nur Zusatz)», Zusatz «12-16», Wochen «ungerade KW» (und eine zweite Zeile für gerade KW)."),
-        ("eine einmalige Abwesenheit oder einen Sonderwunsch erfassen", "Nicht hier – in Schritt 1 «Planung»."),
+        ("eine einmalige Abwesenheit oder einen Sonderwunsch erfassen",
+         "Nicht hier – in Schritt 1 «Planung» (eine Woche) oder im 📆 Jahresplan (Ferien von–bis, Feiertage)."),
     ],
 }
 
@@ -991,7 +1153,7 @@ def _discard_cb() -> None:
 def render_save_bar() -> None:
     changes = E.describe_changes(json.loads(ts["cfg_saved_json"]), ts["cfg"])
     if entries_dirty:
-        changes.append("Abwesenheiten / Sonderwünsche aus Schritt 1")
+        changes.append("Einträge (Schritt 1 / Jahresplan) oder Feiertage")
     # Gleiche Höhe in beiden Zuständen, damit die Seite beim ersten Ändern nicht springt
     with st.container(border=True, key="savebar_dirty" if changes else "savebar_ok"):
         c1, c2, c3, c4 = st.columns([5.2, 1.6, 1.2, 1.2], vertical_alignment="center")
@@ -2011,7 +2173,7 @@ def _add_entry_cb() -> None:
         "note": _s(ss.get(wk("f_note"))), "task": task,
         "jahr": info["iso_year"], "kw_start": info["kw"], "weeks": max(1, int(ss.get(wk("f_weeks")) or 1)),
     })
-    write_local(T.absence_path, entries_json(ts["entries"]))
+    persist_entries()
     ss[wk("f_days")] = []
     ss[wk("f_note")] = ""
     ss[wk("f_weeks")] = 1
@@ -2020,14 +2182,14 @@ def _add_entry_cb() -> None:
 
 def _remove_entry_cb(idx: int) -> None:
     if 0 <= idx < len(ts["entries"]):
-        ts["entries"].pop(idx)
-        write_local(T.absence_path, entries_json(ts["entries"]))
+        e = ts["entries"].pop(idx)
+        persist_entries()
+        st.toast(f"{disp(e.get('name', ''))}: {GRUENDE.get(e.get('type'), (e.get('type'), ''))[0]} gelöscht", icon="🗑️")
 
 
 def _purge_cb() -> None:
-    ts["entries"] = [e for e in ts["entries"]
-                     if entry_widx_start(e) + max(1, int(e.get("weeks", 1))) > info["widx"]]
-    write_local(T.absence_path, entries_json(ts["entries"]))
+    ts["entries"] = [e for e in ts["entries"] if entry_span(e)[1] >= _as_date(info["monday"])]
+    persist_entries()
 
 
 def _save_entries_cb() -> None:
@@ -2042,16 +2204,24 @@ def _entry_row(idx: int, e: dict, active: bool) -> None:
     note = e.get("note") if e.get("note") and e.get("note") != e.get("task") else ""
     note_html = f'<span class="entry-note">· „{html_escape(note)}"</span>' if note else ""
     dot = {"Home Office": "HO"}.get(art, art)
-    l, r = st.columns([12, 1], vertical_alignment="center")
+    tag = '<span class="entry-tag" title="Zeitraum aus dem 📆 Jahresplan">📆</span>' if entry_range(e) else ""
+    l, r = st.columns([10, 1.3], vertical_alignment="center")
     l.markdown(
         f'<div class="entry-row" {"" if active else "style=opacity:0.5;"}><span class="entry-dot {html_escape(dot)}"></span>'
         f'<span class="entry-name">{html_escape(disp(e["name"]))}</span>'
-        f'<span class="entry-meta">· {html_escape(label)} · {days_label(e["days"])} ({slot_label(e["slots"])}) · '
-        f'{entry_kw_label(e)}</span>{note_html}</div>',
+        f'<span class="entry-meta">· {html_escape(label)} · {html_escape(entry_when_label(e))}</span>{note_html}{tag}</div>',
         unsafe_allow_html=True,
     )
-    r.button("✕", key=wk(f"rm_{idx}_{len(ts['entries'])}"), help="Eintrag löschen", width="stretch",
-             on_click=_remove_entry_cb, args=(idx,))
+    r.button("✕", key=wk(f"rm_{idx}_{len(ts['entries'])}"), width="stretch", on_click=_remove_entry_cb, args=(idx,),
+             help="Eintrag löschen" + (" (ganzer Zeitraum)" if entry_range(e) else ""))
+
+
+def _feiertag_rows(monday, tage: dict) -> None:
+    for d, txt in tage.items():
+        st.markdown(f'<div class="entry-row fe-row"><span class="entry-dot Feiertag"></span>'
+                    f'<span class="entry-name">🎉 {html_escape(txt)}</span><span class="entry-meta">· '
+                    f'{datum_label(_as_date(monday) + timedelta(days=d))} · ganzes Team frei</span>'
+                    f'<span class="entry-tag" title="Feiertag aus dem 📆 Jahresplan">📆</span></div>', unsafe_allow_html=True)
 
 
 def render_planung() -> None:
@@ -2085,7 +2255,9 @@ def render_planung() -> None:
                 st.selectbox("Welche Aufgabe?", task_opts, key=wk("f_task"), accept_new_options=True,
                              help="Aus der Liste wählen oder einen eigenen Code eintippen (z. B. ERP)")
 
-            st.markdown('<div class="field-label">Wann? <span>Tage – mehrere möglich</span></div>', unsafe_allow_html=True)
+            fe_hint = "".join(f" · 🎉 {DAY_KEYS[d]} {html_escape(t)}" for d, t in info["feiertage"].items())
+            st.markdown(f'<div class="field-label">Wann? <span>Tage – mehrere möglich · {info["monday"]:%d.%m.} – '
+                        f'{info["friday"]:%d.%m.}{fe_hint}</span></div>', unsafe_allow_html=True)
             d1, d2, d3 = st.columns([2.6, 1.2, 0.8], vertical_alignment="center")
             with d1:
                 st.segmented_control("Tage", DAY_KEYS, selection_mode="multi", key=wk("f_days"),
@@ -2130,19 +2302,23 @@ def render_planung() -> None:
 
     with right:
         entries = ts["entries"]
-        now = [(i, e) for i, e in enumerate(entries) if entry_active(e, info["widx"])]
-        later = [(i, e) for i, e in enumerate(entries) if not entry_active(e, info["widx"])]
+        monday = _as_date(info["monday"])
+        now = [(i, e) for i, e in enumerate(entries) if entry_days(e, monday)]
+        later = sorted(((i, e) for i, e in enumerate(entries) if not entry_days(e, monday)),
+                       key=lambda ie: entry_span(ie[1])[0])
         with st.container(border=True):
             st.markdown(f'<div class="card-head"><div><h2 style="font-size:15.5px; margin:0;">Einträge</h2>'
                         f'<div style="font-size:12.5px; color:var(--text-mute);">{len(now)} für KW {info["kw"]} · '
                         f'{len(entries)} insgesamt</div></div></div>', unsafe_allow_html=True)
-            if not entries:
+            if not entries and not info["feiertage"]:
                 st.markdown('<div class="empty-state"><div class="icon">📅</div><div class="ttl">Keine Abwesenheiten erfasst.</div>'
-                            '<div>Links eintragen – oder direkt «Plan generieren», wenn alle da sind.</div></div>',
+                            '<div>Links eintragen – oder direkt «Plan generieren», wenn alle da sind. '
+                            'Ferien übers Jahr: 📆 Jahresplan.</div></div>',
                             unsafe_allow_html=True)
             else:
                 st.markdown(f'<div class="group-label">gilt für KW {info["kw"]}</div>', unsafe_allow_html=True)
-                if not now:
+                _feiertag_rows(monday, info["feiertage"])
+                if not now and not info["feiertage"]:
                     st.caption("Keine – in dieser Woche sind alle laut Stammdaten da.")
                 for i, e in now:
                     _entry_row(i, e, True)
@@ -2159,7 +2335,9 @@ def render_planung() -> None:
                     (st.success if ok else st.warning)(m)
         st.markdown(f'<div class="team-hint">👥 <b>{n_active}</b> von {n_total} Personen aktiv'
                     f'{" · <b>ungespeicherte Team-Änderungen</b>" if cfg_dirty else ""}. '
-                    'Personen, Teilzeit, wer darf was und Regeln: <b>⚙ Team & Regeln</b> (oben).</div>',
+                    'Personen, Teilzeit, wer darf was und Regeln: <b>⚙ Team & Regeln</b> (oben).<br>'
+                    '🏖️ Ferien über mehrere Wochen und 🎉 Feiertage: <b>📆 Jahresplan</b> (oben) – '
+                    'sie erscheinen automatisch in jeder betroffenen Woche.</div>',
                     unsafe_allow_html=True)
 
 
@@ -2247,15 +2425,18 @@ def _plan_table_html(res: dict) -> str:
     parts = ['<div class="plan-wrap"><table class="plan"><thead><tr>',
              f'<th class="team-head" colspan="2" rowspan="2"><div class="ttl">TEAM {TEAM}</div>'
              f'<div class="legend">{legend}</div></th>']
+    fe_tage = res.get("feiertage") or {}
     for d in range(5):
         datum = (monday + timedelta(days=d)).strftime("%d.%m.")
         pill = ""
-        if IS_KSC:
+        if IS_KSC and str(res["tagesverantwortung"][d]) != ak.FEIERTAG:
             tv = str(res["tagesverantwortung"][d])
             color = tvc.get(tv)
             style = f'style="background:#{color}; color:{_fg_for(color)};"' if color else ""
             pill = (f'<span class="tv-pill{" open" if "OFFEN" in tv else ""}"><span class="tv-tag" {style}>TV</span>'
                     f'<span class="tv-name">{html_escape(tv)}</span></span>')
+        if d in fe_tage:
+            pill += f'<span class="fe-pill">🎉 {html_escape(fe_tage[d])}</span>'
         parts.append(f'<th class="day-head" colspan="2"><span class="day-name">{DAYS[d].upper()}</span>'
                      f'<span class="day-date">{datum}</span>{pill}</th>')
     parts.append("</tr><tr>")
@@ -2342,14 +2523,18 @@ def _coverage_cards(res: dict) -> None:
     for i in range(0, len(cov), 5):
         cols = st.columns(5)
         for col, c in zip(cols, cov[i:i + 5]):
-            if IS_KSC:
+            if c.get("feiertag"):
+                items = []
+            elif IS_KSC:
                 items = [("TEL", c["tel"], c["tel_target"], c["tel_ok"]), ("ABKL", c["abkl"], c["abkl_target"], c["abkl_ok"])]
             else:
                 items = [(x["code"], x["have"], x["need"], x["ok"]) for x in c["items"]]
+            empty = (f'<div style="color:#64748b;">🎉 {html_escape(c["feiertag"])}</div>' if c.get("feiertag")
+                     else '<div style="color:#94a3b8;">nichts zu besetzen</div>')
             lines = "".join(
                 f'<div style="display:flex; justify-content:space-between;"><span>{html_escape(code)}</span>'
                 f'<span style="color:{"#16a34a" if ok else "#dc2626"}; font-weight:700;">{have}/{need}</span></div>'
-                for code, have, need, ok in items) or '<div style="color:#94a3b8;">nichts zu besetzen</div>'
+                for code, have, need, ok in items) or empty
             col.markdown(
                 f'<div style="background:#f8fafc; border:1px solid #e3e8f0; border-radius:8px; padding:10px 12px; font-size:12px;">'
                 f'<div style="display:flex; justify-content:space-between; color:#475569; margin-bottom:4px;">'
@@ -2394,6 +2579,10 @@ def render_ergebnis() -> None:
         render_banner("ok", "Alle Pflicht-Regeln eingehalten.", [])
     if soft:
         render_banner("warn", "Hinweise", soft)
+    if res.get("feiertage"):
+        render_banner("info", "Feiertag – das ganze Team hat frei, an diesen Halbtagen wird nichts geplant",
+                      [f"{DAYS[d]} {(res['monday'] + timedelta(days=d)).strftime('%d.%m.')}: {t}"
+                       for d, t in res["feiertage"].items()])
     if res["warnings"]:
         render_banner("warn", "Auswirkungen der erfassten Abwesenheiten", res["warnings"])
     if infos:
@@ -2427,11 +2616,563 @@ def render_ergebnis() -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  📆 Jahresplan – Ferien und Feiertage fürs ganze Jahr
+# ══════════════════════════════════════════════════════════════════════
+#  Grobe Übersicht pro Kalenderwoche. Einträge landen in derselben Liste wie
+#  in Schritt 1 (als Zeitraum von–bis) und gelten automatisch für jede
+#  betroffene Woche; Feiertage gelten fürs ganze Team.
+
+# Farbe pro Art: (ein Teil der Arbeitstage weg, die ganze Woche weg)
+JP_FARBEN = {"Ferien": ("#bae6fd", "#0284c7"), "Frei": ("#a5f3fc", "#0891b2"), "Krank": ("#fecaca", "#dc2626"),
+             "andere": ("#ede9fe", "#7c3aed")}
+JP_ARTEN_LABEL = {"Ferien": "Ferien", "Frei": "Frei", "Krank": "krank", "andere": "Termin / HO / Aufgabe"}
+MONATE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
+FREI_WAHL = {"–": None, "ganzer Tag": "ganz", "Vormittag": "VM", "Nachmittag": "NM"}
+FREI_WAHL_LABEL = {v: k for k, v in FREI_WAHL.items()}
+
+
+def jahr_wochen(jahr: int) -> list[date]:
+    """Montage aller Kalenderwochen (ISO) des Jahres – 52 oder 53."""
+    d, out = date.fromisocalendar(jahr, 1, 1), []
+    while d.isocalendar()[0] == jahr:
+        out.append(d)
+        d += timedelta(weeks=1)
+    return out
+
+
+def halbe_tage(n: int) -> str:
+    """Halbtage → Tage: 4 → '2', 5 → '2½', 1 → '½'."""
+    tage, rest = divmod(n, 2)
+    return f"{tage or ''}{'½' if rest else ''}" or "0"
+
+
+def jahres_daten(jahr: int) -> list[dict]:
+    """Pro KW: Feiertage, Abwesenheiten pro Person und ob der Plan aufgeht.
+    Rechnet für jede kommende Woche den echten Plan durch (1–2 ms pro Woche) – nur bei Änderungen neu."""
+    key = hashlib.md5((E.config_to_json(ts["cfg"]) + absences_json() + f"{jahr}|{date.today()}")
+                      .encode("utf-8")).hexdigest()
+    cache = ts.get("jp_cache")
+    if cache and cache[0] == key:
+        return cache[1]
+    heute = date.today()
+    out = []
+    for monday in jahr_wochen(jahr):
+        vorbei = monday + timedelta(days=4) < heute
+        if vorbei:
+            inp, hard, knapp = week_inputs(monday), [], []
+        else:
+            sched, warnings, inp = build_week(monday)
+            hard = [i for i in E.validate_schedule(sched) if i.startswith("❌")]
+            knapp = [w for w in warnings if w.startswith(("KRITISCH", "Knapp"))]
+        moeglich = {n: sum(1 for d in range(5) for s in range(2)
+                           if e.is_available(d, s) and (d, s) not in inp["feiertage"])
+                    for n, e in inp["employees"].items()}
+        out.append({"monday": monday, "kw": monday.isocalendar()[1], "vorbei": vorbei,
+                    "feiertage": ft.pro_tag(inp["feiertage"]), "halbtage": inp["halbtage"],
+                    "details": inp["details"], "moeglich": moeglich, "hard": hard, "knapp": knapp})
+    ts["jp_cache"] = (key, out)
+    return out
+
+
+def _jp_zelle(w: dict, short: str) -> tuple[str, str, str] | None:
+    """(Text, Hintergrund, Schrift) für Person × KW – None, wenn nichts eingetragen ist."""
+    ht = w["halbtage"].get(short) or {}
+    n = sum(ht.values())
+    if not n:
+        return None
+    art = max(ht, key=ht.get)
+    hell, kraeftig = JP_FARBEN.get(art, JP_FARBEN["andere"])
+    if n >= w["moeglich"].get(short, 0):       # an allen Arbeitstagen der Woche weg
+        return halbe_tage(n), kraeftig, "#ffffff"
+    return halbe_tage(n), hell, "#0f172a"
+
+
+def _jp_grid_html(daten: list[dict]) -> str:
+    sel = _as_date(info["monday"])
+    monate: list[list[int]] = []
+    month_start = set()
+    for i, w in enumerate(daten):
+        m = (w["monday"] + timedelta(days=3)).month     # die KW gehört zum Monat ihres Donnerstags
+        if not monate or monate[-1][0] != m:
+            monate.append([m, 0])
+            month_start.add(i)
+        monate[-1][1] += 1
+
+    def cls(i: int, w: dict) -> str:
+        c = [x for x, on in (("past", w["vorbei"]), ("sel", w["monday"] == sel), ("ms", i in month_start)) if on]
+        return f' class="{" ".join(c)}"' if c else ""
+
+    heute = date.today()
+    rtl = daten[0]["monday"].year <= heute.year and heute.isocalendar()[1] > 26 and not daten[-1]["vorbei"] \
+        and daten[0]["monday"] <= heute
+    h = [f'<div class="jp-wrap{" rtl" if rtl else ""}"><table class="jp"><thead><tr><th class="jp-name"></th>']
+    h += [f'<th class="jp-month ms" colspan="{n}">{MONATE[m - 1]}</th>' for m, n in monate]
+    h.append('</tr><tr><th class="jp-name">KW</th>')
+    for i, w in enumerate(daten):
+        tip = f"KW {w['kw']}: {range_label(w['monday'], w['monday'] + timedelta(days=4))}"
+        h.append(f'<th{cls(i, w)} title="{html_escape(tip)}">{w["kw"]}</th>')
+    h.append('</tr></thead><tbody><tr class="jp-fe"><td class="jp-name">🎉 Feiertage</td>')
+    for i, w in enumerate(daten):
+        if w["feiertage"]:
+            tip = " · ".join(f"{datum_label(w['monday'] + timedelta(days=d))} {t}" for d, t in w["feiertage"].items())
+            h.append(f'<td{cls(i, w)} title="{html_escape(tip)}">🎉</td>')
+        else:
+            h.append(f"<td{cls(i, w)}></td>")
+    h.append("</tr>")
+    for m in active_members():
+        short, name = m["short"], m.get("name") or m["short"]
+        h.append(f'<tr><td class="jp-name">{html_escape(name)}</td>')
+        for i, w in enumerate(daten):
+            z = _jp_zelle(w, short)
+            if not z:
+                h.append(f"<td{cls(i, w)}></td>")
+                continue
+            tip = f"{name} · KW {w['kw']}: " + " · ".join(w["details"].get(short, [])) + f" – {z[0]} Arbeitstag(e)"
+            h.append(f'<td{cls(i, w)} title="{html_escape(tip)}"><span class="jp-cell" '
+                     f'style="background:{z[1]}; color:{z[2]};">{z[0]}</span></td>')
+        h.append("</tr>")
+    h.append('<tr class="jp-status"><td class="jp-name" title="Für jede kommende Woche wird der Plan mit allen '
+             'Einträgen und Feiertagen durchgerechnet">Plan geht auf?</td>')
+    for i, w in enumerate(daten):
+        if w["vorbei"]:
+            h.append(f"<td{cls(i, w)}></td>")
+            continue
+        if w["hard"]:
+            color = "var(--err)"
+            tip = (f"KW {w['kw']}: geht nicht auf, {len(w['hard'])} Regel(n) verletzt – im Wochenplan von Hand anpassen: "
+                   + " · ".join(x[2:] for x in w["hard"][:4]) + (" …" if len(w["hard"]) > 4 else ""))
+        elif w["knapp"]:
+            color, tip = "var(--warn)", f"KW {w['kw']}: knapp – " + " · ".join(w["knapp"][:3])
+        else:
+            color, tip = "var(--ok)", f"KW {w['kw']}: genug Personen da"
+        h.append(f'<td{cls(i, w)} title="{html_escape(tip)}"><span class="jp-dot" style="background:{color};"></span></td>')
+    h.append("</tr></tbody></table></div>")
+    return "".join(h)
+
+
+def _jp_legend_html() -> str:
+    arten = [a for a in ("Ferien", "Frei", "Krank") if a in T.gruende] + ["andere"]
+    items = [f'<span><span class="jp-cell" style="background:{JP_FARBEN[a][1]}; color:#fff;">5</span> '
+             f'<span class="jp-cell" style="background:{JP_FARBEN[a][0]};">2</span> {JP_ARTEN_LABEL[a]}</span>'
+             for a in arten]
+    items.append("<span>Zahl = Arbeitstage weg in der KW · kräftig = die ganze Woche · Maus über die Zelle = Details</span>")
+    items.append('<span><span class="jp-dot" style="background:var(--ok);"></span> geht auf &nbsp;'
+                 '<span class="jp-dot" style="background:var(--warn);"></span> knapp &nbsp;'
+                 '<span class="jp-dot" style="background:var(--err);"></span> geht nicht auf (Regeln verletzt)</span>')
+    return '<div class="jp-legend">' + "".join(items) + "</div>"
+
+
+def entry_halbtage(e: dict) -> int:
+    """Arbeits-Halbtage, die ein Eintrag betrifft – laut Anwesenheit der Person (Teilzeit),
+    ohne Wochenenden und Feiertage. So zählen Ferientage richtig."""
+    von, bis = entry_span(e)
+    monday, n = von - timedelta(days=von.weekday()), 0
+    while monday <= bis:
+        emp = E.create_employees(monday.isocalendar()[1], ts["cfg"]).get(e.get("name"))
+        fe = ft.woche(ts["feiertage"], monday)
+        n += sum(1 for d in entry_days(e, monday) for s in e["slots"]
+                 if (d, s) not in fe and (emp is None or emp.is_available(d, s)))
+        monday += timedelta(weeks=1)
+    return n
+
+
+def jahresplan_excel(jahr: int, daten: list[dict]) -> bytes:
+    """Jahresübersicht zum Ausdrucken: Personen × KW, dazu Einträge und Feiertage als Liste."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    def font(size=10, **kw):
+        return Font(name="Calibri", size=size, **kw)
+
+    def fill(hex_color: str) -> PatternFill:
+        return PatternFill("solid", fgColor=hex_color.lstrip("#").upper())
+
+    thin = Side(style="thin", color="CBD5E1")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Jahresplan {jahr}"
+    ws.cell(1, 1, f"Jahresplan {jahr} · Ferien & Feiertage · Team {TEAM}").font = font(14, bold=True)
+    ws.cell(2, 1, "Zahl = Arbeitstage abwesend in der Kalenderwoche · kräftige Farbe = die ganze Woche · "
+                  f"FT = Feiertag · Stand {date.today():%d.%m.%Y}").font = font(9, italic=True, color="64748B")
+    r_mon, r_kw, r_fe, r0 = 4, 5, 6, 7
+    ws.cell(r_kw, 1, "KW").font = font(bold=True)
+    ws.cell(r_fe, 1, "Feiertage").font = font(bold=True)
+    last = None
+    for i, w in enumerate(daten):
+        col = 2 + i
+        m = (w["monday"] + timedelta(days=3)).month
+        if m != last:
+            ws.cell(r_mon, col, MONATE[m - 1]).font = font(9, bold=True)
+            last = m
+        c = ws.cell(r_kw, col, w["kw"])
+        c.font, c.alignment, c.border, c.fill = font(9, bold=True), center, border, fill("F1F5F9")
+        c = ws.cell(r_fe, col)
+        c.border = border
+        if w["feiertage"]:
+            c.value, c.alignment, c.fill = "FT", center, fill("E9D5FF")
+            c.font = font(8, bold=True, color="6B21A8")
+    members = active_members()
+    for j, m in enumerate(members):
+        row = r0 + j
+        c = ws.cell(row, 1, m.get("name") or m["short"])
+        c.font, c.border = font(), border
+        for i, w in enumerate(daten):
+            c = ws.cell(row, 2 + i)
+            c.border, c.alignment = border, center
+            z = _jp_zelle(w, m["short"])
+            if z:
+                c.value, c.fill = z[0], fill(z[1])
+                c.font = font(9, bold=True, color=z[2].lstrip("#").upper())
+    row = r0 + len(members) + 1
+    ws.cell(row, 1, "Legende").font = font(bold=True)
+    for k, a in enumerate([a for a in ("Ferien", "Frei", "Krank") if a in T.gruende] + ["andere"]):
+        for off, (color, txt) in enumerate(((JP_FARBEN[a][1], "ganze Woche"), (JP_FARBEN[a][0], "einzelne Tage"))):
+            c = ws.cell(row + 1 + k, 2 + off * 6)
+            c.fill, c.border = fill(color), border
+            ws.cell(row + 1 + k, 3 + off * 6, f"{JP_ARTEN_LABEL[a]} – {txt}").font = font(9)
+    ws.column_dimensions["A"].width = 20
+    for i in range(len(daten)):
+        ws.column_dimensions[get_column_letter(2 + i)].width = 3.7
+    ws.freeze_panes = ws.cell(r0, 2)
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+    start, end = daten[0]["monday"], daten[-1]["monday"] + timedelta(days=4)
+    ws2 = wb.create_sheet("Einträge")
+    head = ["Name", "Was", "Von", "Bis", "Halbtag", "Arbeitstage", "Wochentage", "Notiz"]
+    for col, txt in enumerate(head, 1):
+        c = ws2.cell(1, col, txt)
+        c.font, c.fill, c.border = font(bold=True), fill("E2E8F0"), border
+    items = sorted((e for e in ts["entries"] if entry_span(e)[1] >= start and entry_span(e)[0] <= end),
+                   key=lambda e: (entry_span(e)[0], disp(e.get("name", ""))))
+    for r, e in enumerate(items, 2):
+        von, bis = entry_span(e)
+        art = e.get("type", "Custom")
+        was = GRUENDE.get(art, (art, ""))[0].split(" ", 1)[-1] + (f" «{e['task']}»" if art == "Custom" and e.get("task") else "")
+        vals = [disp(e.get("name", "")), was, von, bis, slot_label(e["slots"]), halbe_tage(entry_halbtage(e)),
+                "" if entry_range(e) else days_label(e.get("days", [])), e.get("note", "")]
+        for col, v in enumerate(vals, 1):
+            c = ws2.cell(r, col, v)
+            c.font, c.border = font(), border
+            if isinstance(v, date):
+                c.number_format = "DD.MM.YYYY"
+    for col, width in zip("ABCDEFGH", (20, 22, 12, 12, 12, 12, 14, 34)):
+        ws2.column_dimensions[col].width = width
+    ws2.freeze_panes = "A2"
+
+    ws3 = wb.create_sheet("Feiertage")
+    for col, txt in enumerate(["Datum", "Tag", "Feiertag", "frei"], 1):
+        c = ws3.cell(1, col, txt)
+        c.font, c.fill, c.border = font(bold=True), fill("E2E8F0"), border
+    for r, (d, (name, slots)) in enumerate(ft.tage(ts["feiertage"], start, end).items(), 2):
+        for col, v in enumerate([d, WOCHENTAGE[d.weekday()], name, slot_label(list(slots))], 1):
+            c = ws3.cell(r, col, v)
+            c.font, c.border = font(), border
+            if isinstance(v, date):
+                c.number_format = "DD.MM.YYYY"
+    for col, width in zip("ABCD", (12, 6, 28, 12)):
+        ws3.column_dimensions[col].width = width
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ── Formular «Ferien oder Abwesenheit eintragen» ─────────────────────
+
+def _jp_slots() -> list[int]:
+    slot = st.session_state.get(wk("j_slot")) or "Ganzer Tag"
+    return [0, 1] if slot == "Ganzer Tag" else [0] if slot == "Vormittag" else [1]
+
+
+def _jp_von_cb() -> None:
+    """Neues «Von» nach «Bis»? Dann «Bis» auf den Freitag derselben Woche setzen."""
+    ss = st.session_state
+    von, bis = ss.get(wk("j_von")), ss.get(wk("j_bis"))
+    if von and (not bis or bis < von):
+        ss[wk("j_bis")] = von + timedelta(days=max(0, 4 - von.weekday()))
+
+
+def _jp_add_cb() -> None:
+    ss = st.session_state
+    person = {person_label(s): s for s in active_shorts()}.get(ss.get(wk("j_employee")) or "")
+    art = ss.get(wk("j_type")) or "Ferien"
+    von, bis = ss.get(wk("j_von")), ss.get(wk("j_bis"))
+    task = _s(ss.get(wk("j_task"))) if art == "Custom" else ""
+    msg = None
+    if not person:
+        msg = "Bitte eine Person wählen."
+    elif not von or not bis:
+        msg = "Bitte «Von» und «Bis» wählen."
+    elif bis < von:
+        msg = "«Bis» liegt vor «Von»."
+    elif (bis - von).days > 366:
+        msg = "Höchstens ein Jahr am Stück – bitte aufteilen."
+    elif art == "Custom" and not task:
+        msg = "Bitte die Aufgabe wählen, die fest eingetragen werden soll."
+    elif not entry_halbtage({"name": person, "von": von.isoformat(), "bis": bis.isoformat(), "slots": _jp_slots()}):
+        msg = f"{disp(person)} arbeitet in diesem Zeitraum nie (Wochenende, Feiertage oder freie Tage laut Pensum)."
+    if msg:
+        ss[wk("j_msg")] = msg
+        return
+    m0, m1 = von - timedelta(days=von.weekday()), bis - timedelta(days=bis.weekday())
+    jahr, kw, _ = m0.isocalendar()
+    ts["entries"].append({
+        "name": person, "type": art, "von": von.isoformat(), "bis": bis.isoformat(), "slots": _jp_slots(),
+        "note": _s(ss.get(wk("j_note"))), "task": task,
+        # für ältere App-Versionen: betroffene Wochen, aber keine Wochentage
+        "days": [], "jahr": jahr, "kw_start": kw, "weeks": (m1 - m0).days // 7 + 1,
+    })
+    persist_entries()
+    ss[wk("j_note")] = ""
+    st.toast(f"{disp(person)}: {GRUENDE[art][0]} {range_label(von, bis)} eingetragen", icon="✅")
+
+
+def _jp_form() -> None:
+    ss = st.session_state
+    with st.container(border=True):
+        st.markdown('<div class="card-head"><div><h2 style="font-size:15.5px; margin:0;">Ferien oder Abwesenheit '
+                    'eintragen</h2><div style="font-size:12.5px; color:var(--text-mute);">von – bis, auch über '
+                    'mehrere Wochen · Wochenenden und Feiertage zählen nicht</div></div></div>', unsafe_allow_html=True)
+        opts = [person_label(s) for s in active_shorts()]
+        if ss.get(wk("j_employee")) not in opts:
+            ss[wk("j_employee")] = opts[0] if opts else None
+        st.markdown('<div class="field-label">Wer?</div>', unsafe_allow_html=True)
+        st.selectbox("Person", opts, key=wk("j_employee"), label_visibility="collapsed")
+
+        st.markdown('<div class="field-label">Was?</div>', unsafe_allow_html=True)
+        if ss.get(wk("j_type")) not in T.gruende:
+            ss[wk("j_type")] = "Ferien"
+        art = st.segmented_control("Art", list(T.gruende), key=wk("j_type"), label_visibility="collapsed",
+                                   format_func=lambda g: GRUENDE[g][0]) or "Ferien"
+        if art == "Custom":
+            task_opts = [t for t in team_task_options(ts["cfg"])
+                         if t and t not in ("KRANK", "FERIEN", "Ferien", "Frei", ak.FEIERTAG)]
+            st.selectbox("Welche Aufgabe?", task_opts, key=wk("j_task"), accept_new_options=True,
+                         help="Aus der Liste wählen oder einen eigenen Code eintippen (z. B. Schulung)")
+
+        heute = date.today()
+        ss.setdefault(wk("j_von"), _as_date(info["monday"]))
+        ss.setdefault(wk("j_bis"), _as_date(info["monday"]) + timedelta(days=4))
+        lim = {"min_value": date(heute.year - 1, 1, 1), "max_value": date(heute.year + 2, 12, 31),
+               "format": "DD.MM.YYYY"}
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('<div class="field-label">Von</div>', unsafe_allow_html=True)
+            st.date_input("Von", key=wk("j_von"), on_change=_jp_von_cb, label_visibility="collapsed", **lim)
+        with c2:
+            st.markdown('<div class="field-label">Bis <span>(inklusive)</span></div>', unsafe_allow_html=True)
+            st.date_input("Bis", key=wk("j_bis"), label_visibility="collapsed", **lim)
+        st.markdown('<div class="field-label">Halbtag <span>gilt für jeden Tag im Zeitraum</span></div>',
+                    unsafe_allow_html=True)
+        if ss.get(wk("j_slot")) not in ("Ganzer Tag", "Vormittag", "Nachmittag"):
+            ss[wk("j_slot")] = "Ganzer Tag"
+        st.segmented_control("Halbtag", ["Ganzer Tag", "Vormittag", "Nachmittag"], key=wk("j_slot"),
+                             label_visibility="collapsed")
+        st.markdown('<div class="field-label">Notiz <span>optional</span></div>', unsafe_allow_html=True)
+        st.text_input("Notiz", key=wk("j_note"), label_visibility="collapsed", placeholder="z. B. Sommerferien")
+
+        von, bis = ss.get(wk("j_von")), ss.get(wk("j_bis"))
+        what = GRUENDE[art][0] + (f" «{_s(ss.get(wk('j_task')))}»" if art == "Custom" and ss.get(wk("j_task")) else "")
+        if von and bis and bis >= von:
+            person = {person_label(x): x for x in active_shorts()}.get(ss.get(wk("j_employee")) or "", "")
+            n = entry_halbtage({"name": person, "von": von.isoformat(), "bis": bis.isoformat(), "slots": _jp_slots()})
+            fe_namen = [name for name, _ in ft.tage(ts["feiertage"], von, bis).values()]
+            when = html_escape(f"{range_label(von, bis)} · {halbe_tage(n)} Arbeitstag{'' if n == 2 else 'e'} · "
+                               f"{kw_range_label(von, bis)}" + (f" · ohne {', '.join(fe_namen)}" if fe_namen else ""))
+        else:
+            when = "<i>«Bis» liegt vor «Von»</i>"
+        st.markdown(f'<div class="preview-line">→ <b>{html_escape(ss.get(wk("j_employee")) or "–")}</b> · '
+                    f'{html_escape(what)} · {when}</div>', unsafe_allow_html=True)
+        msg = ss.pop(wk("j_msg"), None)
+        if msg:
+            st.warning(msg)
+        st.button("＋  Eintragen", key=wk("j_add"), type="primary", width="stretch", on_click=_jp_add_cb)
+
+
+def _jp_entries(jahr: int, daten: list[dict]) -> None:
+    start, end = daten[0]["monday"], daten[-1]["monday"] + timedelta(days=4)
+    heute = date.today()
+    items = sorted(((i, e) for i, e in enumerate(ts["entries"])
+                    if entry_span(e)[1] >= start and entry_span(e)[0] <= end),
+                   key=lambda ie: (entry_span(ie[1])[0], disp(ie[1].get("name", ""))))
+    with st.container(border=True):
+        st.markdown(f'<div class="card-head"><div><h2 style="font-size:15.5px; margin:0;">Einträge {jahr}</h2>'
+                    f'<div style="font-size:12.5px; color:var(--text-mute);">{len(items)} · nach Datum · aus dem '
+                    'Jahresplan und aus Schritt 1 · vergangene blass</div></div></div>', unsafe_allow_html=True)
+        if not items:
+            st.markdown('<div class="empty-state"><div class="icon">🏖️</div><div class="ttl">Noch nichts eingetragen.</div>'
+                        '<div>Links Ferien oder freie Tage eintragen – sie erscheinen oben in der Übersicht und '
+                        'automatisch im Wochenplan der betroffenen Wochen.</div></div>', unsafe_allow_html=True)
+            return
+        box = st.container(height=470, border=False) if len(items) > 9 else st.container(border=False)
+        with box:
+            for i, e in items:
+                _entry_row(i, e, entry_span(e)[1] >= heute)
+
+
+# ── Feiertage ─────────────────────────────────────────────────────────
+
+def _set_feiertage(fe: dict, msg: str = "Feiertage übernommen – gelten sofort für jeden Wochenplan.") -> None:
+    ts["feiertage"] = ft.normalize(fe)
+    ts["fe_version"] += 1
+    persist_entries()
+    st.toast(msg, icon="🎉")
+
+
+def _on_fe_standard(key: str, names: list[str]) -> None:
+    fe = ft.copy_of(ts["feiertage"])
+    for ridx, changes in st.session_state[key].get("edited_rows", {}).items():
+        if "frei" in changes:
+            name, wert = names[int(ridx)], FREI_WAHL.get(_s(changes["frei"]))
+            if wert:
+                fe["standard"][name] = wert
+            else:
+                fe["standard"].pop(name, None)
+    _set_feiertage(fe)
+
+
+def _on_fe_eigene(key: str, base: list[dict]) -> None:
+    rows = [dict(e) for e in base]
+    removed = set()
+    for ridx, changes in st.session_state[key].get("edited_rows", {}).items():
+        i = int(ridx)
+        for col, val in changes.items():
+            if col == "entfernen" and _b(val):
+                removed.add(i)
+            elif col == "Bezeichnung":
+                rows[i]["name"] = _s(val) or rows[i]["name"]
+            elif col == "frei":
+                rows[i]["frei"] = FREI_WAHL.get(_s(val)) or "ganz"
+    fe = ft.copy_of(ts["feiertage"])
+    fe["eigene"] = [r for i, r in enumerate(rows) if i not in removed]
+    _set_feiertage(fe, "Freier Tag entfernt" if removed else "Feiertage übernommen")
+
+
+def _jp_feiertage(jahr: int) -> None:
+    fe = ts["feiertage"]
+    ver = ts["fe_version"]
+    with st.container(border=True):
+        st.markdown(f'<div class="card-head"><div><h2 style="font-size:15.5px; margin:0;">🎉 Feiertage {jahr}</h2>'
+                    '<div style="font-size:12.5px; color:var(--text-mute);">Gelten fürs ganze Team: alle haben frei, '
+                    'es wird nichts geplant und keine Besetzung geprüft. Halbe Tage sind möglich (z. B. Heiligabend '
+                    'nur Nachmittag). Die Daten rechnet die App jedes Jahr selbst aus.</div></div></div>',
+                    unsafe_allow_html=True)
+        left, right = st.columns([1.1, 1], gap="medium")
+        with left:
+            st.markdown('<div class="field-label">Feiertage <span>«–» = wird gearbeitet</span></div>',
+                        unsafe_allow_html=True)
+            kat = ft.katalog(jahr)
+            names = [n for n, _ in kat]
+            df = pd.DataFrame([{"Feiertag": n, "Datum": datum_label(d, True) + (" · Wochenende" if d.weekday() > 4 else ""),
+                                "frei": FREI_WAHL_LABEL[fe["standard"].get(n)]} for n, d in kat],
+                              columns=["Feiertag", "Datum", "frei"])
+            key = wk(f"fe_std_{jahr}_{ver}")
+            st.data_editor(df, key=key, hide_index=True, num_rows="fixed", width="stretch",
+                           height=_editor_height(len(df)), on_change=_on_fe_standard, args=(key, names),
+                           column_config={
+                               "Feiertag": st.column_config.TextColumn("Feiertag", disabled=True),
+                               "Datum": st.column_config.TextColumn(f"{jahr}", disabled=True),
+                               "frei": st.column_config.SelectboxColumn("frei", options=list(FREI_WAHL), required=True,
+                                                                        help="ganzer Tag, nur Vormittag, nur Nachmittag "
+                                                                             "oder «–» (normaler Arbeitstag)")})
+        with right:
+            st.markdown('<div class="field-label">Eigene freie Tage <span>z. B. Brückentag, Betriebsausflug</span></div>',
+                        unsafe_allow_html=True)
+            with st.form(wk(f"fe_add_{ver}"), border=True):
+                c = st.columns([1.25, 1.6, 1.2], vertical_alignment="bottom")
+                d = c[0].date_input("Datum", value=None, format="DD.MM.YYYY",
+                                    min_value=date(jahr - 1, 1, 1), max_value=date(jahr + 2, 12, 31))
+                name = c[1].text_input("Bezeichnung", placeholder="z. B. Brückentag")
+                frei = c[2].selectbox("frei", ["ganzer Tag", "Vormittag", "Nachmittag"])
+                if st.form_submit_button("➕  Freien Tag hinzufügen", type="primary", width="stretch"):
+                    if not d:
+                        st.error("Bitte ein Datum wählen.")
+                    elif d.weekday() > 4:
+                        st.error("Das ist ein Wochenende – da wird ohnehin nicht geplant.")
+                    else:
+                        new = ft.copy_of(fe)
+                        new["eigene"].append({"datum": d.isoformat(), "name": name.strip() or "freier Tag",
+                                              "frei": FREI_WAHL[frei]})
+                        _set_feiertage(new, f"{datum_label(d, True)} als freier Tag eingetragen")
+                        st.rerun()
+            base = list(fe["eigene"])
+            if base:
+                df = pd.DataFrame([{"Datum": datum_label(date.fromisoformat(e["datum"]), True), "Bezeichnung": e["name"],
+                                    "frei": FREI_WAHL_LABEL[e["frei"]], "entfernen": False} for e in base],
+                                  columns=["Datum", "Bezeichnung", "frei", "entfernen"])
+                key = wk(f"fe_own_{ver}")
+                st.data_editor(df, key=key, hide_index=True, num_rows="fixed", width="stretch",
+                               height=_editor_height(len(df)), on_change=_on_fe_eigene, args=(key, base),
+                               column_config={
+                                   "Datum": st.column_config.TextColumn("Datum", disabled=True),
+                                   "Bezeichnung": st.column_config.TextColumn("Bezeichnung"),
+                                   "frei": st.column_config.SelectboxColumn(
+                                       "frei", options=["ganzer Tag", "Vormittag", "Nachmittag"], required=True),
+                                   "entfernen": st.column_config.CheckboxColumn("entfernen", width="small")})
+            else:
+                st.caption("Noch keine eigenen freien Tage.")
+            kommende = [(d, n, s) for d, (n, s) in ft.tage(fe, date.today(), date.today() + timedelta(days=200)).items()]
+            if kommende:
+                st.markdown('<div class="field-label" style="margin-top:14px;">Die nächsten freien Tage</div>',
+                            unsafe_allow_html=True)
+                st.markdown(" · ".join(f"**{datum_label(d, True)}** {html_escape(ft.tag_text(n, s))}"
+                                       for d, n, s in kommende[:6]))
+
+
+def render_jahresplan() -> None:
+    heute_jahr = date.today().isocalendar()[0]
+    jahre = [heute_jahr, heute_jahr + 1]
+    if st.session_state.get("jp_jahr") not in jahre:
+        st.session_state.jp_jahr = info["iso_year"] if info["iso_year"] in jahre else heute_jahr
+    st.markdown(f'<div class="page-head"><h2>📆 Jahresplan · Ferien & Feiertage · {TEAM}</h2><div class="sub">Ferien, '
+                'freie Tage und Feiertage fürs ganze Jahr. Der Wochenplan (Schritt 1–2) übernimmt sie automatisch – '
+                'für die nächste Woche lässt sich dort weiterhin alles einzeln anpassen.</div></div>',
+                unsafe_allow_html=True)
+    render_save_bar()
+    c1, c2, c3 = st.columns([1.5, 5.6, 2.1], vertical_alignment="center")
+    with c1:
+        st.segmented_control("Jahr", jahre, key="jp_jahr", label_visibility="collapsed")
+    jahr = st.session_state.jp_jahr or heute_jahr
+    daten = jahres_daten(jahr)
+    rot = [w["kw"] for w in daten if w["hard"]]
+    gelb = [w["kw"] for w in daten if w["knapp"] and not w["hard"]]
+    n_fe = sum(len(w["feiertage"]) for w in daten)
+    teile = [f"🎉 {n_fe} Feiertag{'e' if n_fe != 1 else ''}"]
+    if rot:
+        teile.append(f"🔴 geht nicht auf: KW {', '.join(map(str, rot[:8]))}{' …' if len(rot) > 8 else ''}")
+    if gelb:
+        teile.append(f"🟠 knapp: KW {', '.join(map(str, gelb[:8]))}{' …' if len(gelb) > 8 else ''}")
+    if not rot and not gelb:
+        teile.append("🟢 alle kommenden Wochen gehen auf")
+    c2.markdown(f'<div style="font-size:13px; color:var(--text-dim);">{" · ".join(teile)}</div>', unsafe_allow_html=True)
+    c3.download_button("⬇  Jahresplan als Excel", data=jahresplan_excel(jahr, daten),
+                       file_name=f"Jahresplan_{TEAM}_{jahr}.xlsx", key=wk("jp_download"), width="stretch",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       help="Übersicht pro KW zum Ausdrucken, dazu alle Einträge und Feiertage als Liste")
+    with st.container(border=True):
+        st.markdown(_jp_grid_html(daten) + _jp_legend_html(), unsafe_allow_html=True)
+    left, right = st.columns([1, 1.15], gap="medium")
+    with left:
+        _jp_form()
+    with right:
+        _jp_entries(jahr, daten)
+    _jp_feiertage(jahr)
+
+
+# ══════════════════════════════════════════════════════════════════════
 #  Seite wählen
 # ══════════════════════════════════════════════════════════════════════
 
 if st.session_state.step == 3:
     render_team_page()
+elif st.session_state.step == 4:
+    render_jahresplan()
 elif st.session_state.step == 1 or ts["result"] is None:
     render_planung()
 else:

@@ -1,4 +1,4 @@
-# Regeln Arbeitsplan KSV (Version 1.0, Oktober 2026)
+# Regeln Arbeitsplan KSV (Version 1.1, Oktober 2026)
 
 > Abgeleitet aus dem bisherigen Excel-Plan «Arbeitsplan_neu 2026_anonym.xlsx»
 > (KW 4–44 ausgefüllt, 40 Wochen). `teamplaner.py` setzt die Regeln um, die
@@ -49,7 +49,8 @@ niemand mit «ja» frei ist (im Ergebnis steht dann ein ℹ️-Hinweis).
 | `KTG` (Kein Tagesgeschäft), `Schulung`, `Sitzung`, `HO` | violett | Schritt 1 «📌 Aufgabe setzen» / «🏠 Home Office» oder Plan bearbeiten |
 | `Tel`, `Pö KSV` | orange / gelb | Plan bearbeiten (im Plan 2026 nur bis KW 8 bzw. vereinzelt) |
 | `Einführung` | hellgelb | Schritt 1 «📌 Aufgabe setzen» (neue Mitarbeitende) |
-| `Frei`, `Ferien` | blau | Schritt 1 (🌙 Frei, 🏖️ Ferien); Nicht-Arbeitstage laut Anwesenheit stehen automatisch als «Frei» im Plan |
+| `Frei`, `Ferien` | blau | Schritt 1 (🌙 Frei, 🏖️ Ferien) oder 📆 Jahresplan (von–bis); Nicht-Arbeitstage laut Anwesenheit stehen automatisch als «Frei» im Plan |
+| `Feiertag` | hellgrau | automatisch an Feiertagen (📆 Jahresplan → Feiertage) – ganzes Team frei, keine Besetzung |
 | `KRANK` | grau | Schritt 1 (🤒 Krank) |
 
 Zusätze wie Arbeitszeiten (`KSV2 10.00`) oder Kürzel (`GH`, `RET`, `RDC`, `ID`)
@@ -81,7 +82,16 @@ Spalten A–L entsprechen genau einem Wochenblock im Jahresplan
 Person, Farben der Aufgaben) – der Block lässt sich direkt in die Jahresdatei
 einfügen. Rechts davon stehen Bemerkungen (Termine), darunter eine Legende.
 
-## 7) Offene Punkte – vom KSV-Team zu bestätigen
+## 7) Feiertage
+
+Im Plan 2026 waren an **Karfreitag, Ostermontag, Auffahrt und Pfingstmontag** alle
+Zellen leer, am **1. Mai** wurde gearbeitet. Voreingestellt sind deshalb die neun
+verbreiteten Deutschschweizer Feiertage (Neujahr, Berchtoldstag, Karfreitag,
+Ostermontag, Auffahrt, Pfingstmontag, 1. August, Weihnachten, Stephanstag) – einstellbar
+im **📆 Jahresplan**, auch halbe Tage und eigene freie Tage. An Feiertagen steht
+`Feiertag` im Plan, es wird nichts geplant und keine Besetzung geprüft.
+
+## 8) Offene Punkte – vom KSV-Team zu bestätigen
 
 | # | Thema | Annahme in Version 1.0 | Wo anpassen |
 |---|---|---|---|
@@ -97,3 +107,5 @@ einfügen. Rechts davon stehen Bemerkungen (Termine), darunter eine Legende.
 | 10 | Tiziana S. | seit KW 9 nicht mehr im Plan → nicht übernommen | Personen → ➕ Neue Person |
 | 11 | Bedeutung von contact / KSV1 / KSV2 | nur die Kürzel übernommen | Aufgaben & Besetzung → Bedeutung |
 | 12 | «Frei» an Nicht-Arbeitstagen | wird eingetragen (wie meist im Plan 2026) | Aufgaben & Besetzung → Häkchen |
+| 13 | Heiligabend / Silvester | normale Arbeitstage (im Plan 2026 noch nicht ausgefüllt) – falls nachmittags frei: «Nachmittag» wählen | 📆 Jahresplan → Feiertage |
+| 14 | Fronleichnam | Arbeitstag; 2026 waren die meisten ab 12 Uhr frei, zwei Personen bis 14 Uhr | 📆 Jahresplan → Feiertage («Nachmittag») oder pro Person «Frei» |

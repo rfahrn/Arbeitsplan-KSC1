@@ -2,15 +2,16 @@
 """
 Oberflächen-Test (Streamlit AppTest, ohne Browser): beide Teams laden, Plan
 generieren, alle Bereiche von «Team & Regeln» öffnen, Eintrag erfassen,
-Team wechseln. Arbeitet auf Kopien von team.json / team_ksv.json – die Dateien
-im Repo bleiben unverändert.
+Team wechseln, Jahresplan (Ferien von–bis, freie Tage). Arbeitet auf Kopien von
+team.json / team_ksv.json – die Dateien im Repo bleiben unverändert.
 
     pytest tests/test_app.py
 """
 from __future__ import annotations
 
+import json
 import shutil
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -57,6 +58,9 @@ def test_team_ganz_durchklicken(team):
     res = at.session_state["teams"][team]["result"]
     assert res and res["team"] == team and res["excel_bytes"]
     assert not [i for i in res["issues"] if i.startswith("❌")], res["issues"]
+    at.button(key="step4").click().run()                  # 📆 Jahresplan
+    assert not at.exception, [e.value for e in at.exception]
+    assert any('class="jp"' in m.value for m in at.markdown)
     at.button(key="step3").click().run()
     for sec in SECTIONS[team]:
         at.session_state[f"{team}·team_section"] = sec
@@ -153,3 +157,80 @@ def test_fest_eingestelltes_team(monkeypatch):
     at = start("KSC")   # Link wird ignoriert
     assert at.session_state["team"] == "KSV"
     assert not [s for s in at.segmented_control if s.key in ("team", "team_pick")]
+
+
+# ── 📆 Jahresplan ─────────────────────────────────────────────────────
+
+def _montag(offset: int) -> date:
+    """Montag der Woche, die oben mit week_offset=offset gewählt ist."""
+    import arbeitskalender as ak
+    return (ak.get_next_monday() + timedelta(weeks=offset)).date()
+
+
+def _ohne_feiertage(daten, datei: str, eigene: list | None = None) -> None:
+    """Testwoche unabhängig vom Datum: keine Standard-Feiertage, nur die angegebenen."""
+    (daten / datei).write_text(json.dumps({"entries": [], "feiertage": {"standard": {}, "eigene": eigene or []}}),
+                               encoding="utf-8")
+
+
+def test_jahresplan_ferien_ueber_zwei_wochen(daten):
+    _ohne_feiertage(daten, "abwesenheiten_ksv.json")
+    at = start("KSV")
+    at.button(key="step4").click().run()
+    mo = _montag(3)
+    at.selectbox(key="KSV·j_employee").set_value("Joy B.")
+    at.segmented_control(key="KSV·j_type").set_value("Ferien")
+    at.date_input(key="KSV·j_von").set_value(mo + timedelta(days=2))     # Mittwoch
+    at.date_input(key="KSV·j_bis").set_value(mo + timedelta(days=8))     # Dienstag der Folgewoche
+    at.button(key="KSV·j_add").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    e = at.session_state["teams"]["KSV"]["entries"][-1]
+    assert (e["name"], e["type"], e["von"], e["bis"]) == ("Joy", "Ferien", (mo + timedelta(days=2)).isoformat(),
+                                                         (mo + timedelta(days=8)).isoformat())
+    gespeichert = json.loads((daten / "abwesenheiten_ksv.json").read_text(encoding="utf-8"))
+    assert gespeichert["entries"][-1]["von"] == e["von"] and "feiertage" in gespeichert
+    # Wochenplan: Ferien Mi–Fr, in der Folgewoche Mo–Di
+    at.selectbox(key="week_offset").set_value(3).run()
+    at.button(key="cta_generate").click().run()
+    sched = at.session_state["teams"]["KSV"]["sched"]
+    assert [sched.get_task("Joy", d, 0) == "Ferien" for d in range(5)] == [False, False, True, True, True]
+    at.button(key="wk_next").click().run()
+    sched = at.session_state["teams"]["KSV"]["sched"]
+    assert [sched.get_task("Joy", d, 1) == "Ferien" for d in range(5)] == [True, True, False, False, False]
+
+
+def test_jahresplan_freier_tag_gilt_im_wochenplan(daten):
+    _ohne_feiertage(daten, "abwesenheiten.json")
+    at = start("KSC")
+    at.button(key="step4").click().run()
+    freitag = _montag(2) + timedelta(days=4)
+    next(d for d in at.date_input if d.label == "Datum").set_value(freitag)
+    next(t for t in at.text_input if t.label == "Bezeichnung").input("Teamtag")
+    next(b for b in at.button if "Freien Tag hinzufügen" in b.label).click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.session_state["teams"]["KSC"]["feiertage"]["eigene"] == [
+        {"datum": freitag.isoformat(), "name": "Teamtag", "frei": "ganz"}]
+    at.selectbox(key="week_offset").set_value(2).run()
+    at.button(key="cta_generate").click().run()
+    res, sched = at.session_state["teams"]["KSC"]["result"], at.session_state["teams"]["KSC"]["sched"]
+    assert res["feiertage"] == {4: "Teamtag"}
+    assert sched.tagesverantwortung[4] == "Feiertag"
+    assert not [i for i in res["issues"] if i.startswith("❌") and "Freitag" in i], res["issues"]
+    assert all(sched.get_task(n, 4, s) in ("Feiertag", "") for n in sched.employees for s in (0, 1))
+
+
+def test_plan_wird_nach_neuem_eintrag_aktualisiert(daten):
+    _ohne_feiertage(daten, "abwesenheiten_ksv.json")
+    at = start("KSV")
+    at.button(key="cta_generate").click().run()               # Plan der nächsten Woche
+    assert at.session_state["teams"]["KSV"]["sched"].get_task("Maria", 0, 0) != "Ferien"
+    mo = _montag(0)
+    at.button(key="step4").click().run()
+    at.selectbox(key="KSV·j_employee").set_value("Maria G.")
+    at.date_input(key="KSV·j_von").set_value(mo)
+    at.date_input(key="KSV·j_bis").set_value(mo + timedelta(days=4))
+    at.button(key="KSV·j_add").click().run()
+    at.button(key="step2").click().run()                      # zurück zum Plan: wird neu erstellt
+    assert not at.exception, [e.value for e in at.exception]
+    sched = at.session_state["teams"]["KSV"]["sched"]
+    assert all(sched.get_task("Maria", d, s) == "Ferien" for d in range(5) for s in (0, 1))

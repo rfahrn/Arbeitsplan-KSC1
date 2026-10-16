@@ -8,7 +8,8 @@ die Regeln des Teams ein und zeigt Konflikte transparent an. **Version 8.0
 (Oktober 2026)**: eine App für beide Teams – Team oben links umschalten, gleiche
 Funktionen, getrennte Daten. Das KSV-Team hat einen frei konfigurierbaren
 Generator: Aufgaben, Anzahl Personen pro Tag, wer was darf und feste Einsätze
-pflegt die KSV-Planerin selbst in der App – ohne Code.
+pflegt die KSV-Planerin selbst in der App – ohne Code. **Version 8.2**: 📆 Jahresplan
+für Ferien und Feiertage – einmal eintragen, jeder Wochenplan berücksichtigt sie.
 
 ---
 
@@ -23,8 +24,8 @@ pflegt die KSV-Planerin selbst in der App – ohne Code.
   `abwesenheiten.json` / `abwesenheiten_ksv.json`) – Änderungen im KSV-Team können
   den KSC-Plan nicht beeinflussen und umgekehrt.
 - Die Regeln sind verschieden und bleiben es: KSC behält seinen bewährten
-  Spezial-Generator (`arbeitskalender.py`, unverändert), KSV bekommt einen
-  konfigurierbaren (`teamplaner.py`).
+  Spezial-Generator (`arbeitskalender.py`, in 8.2 nur um Feiertage ergänzt), KSV
+  bekommt einen konfigurierbaren (`teamplaner.py`).
 - **Eigener Zugang für die KSV-Planerin:** Link `…/?team=KSV` als Lesezeichen –
   die App öffnet direkt im KSV-Team. Wer eine komplett eigene App möchte, deployt
   dasselbe Repo ein zweites Mal auf Streamlit Cloud mit dem Secret
@@ -40,10 +41,11 @@ pflegt die KSV-Planerin selbst in der App – ohne Code.
 | `streamlit_app.py` | Die App für beide Teams (Hauptdatei für Streamlit Cloud) |
 | `arbeitskalender.py` | KSC-Generator: Scheduler mit Spezialregeln, Regelprüfung, Excel nach KSC-Vorlage |
 | `teamplaner.py` | KSV-Generator: Aufgaben/Besetzung frei konfigurierbar, Regelprüfung, Excel im Jahresplan-Format |
+| `feiertage.py` | Schweizer Feiertage (Ostern & Co. jedes Jahr neu berechnet) für Jahresplan und Wochenplan |
 | `team.json` / `team_ksv.json` | **Stammdaten** KSC / KSV: Personen, Anwesenheit, wer darf was, feste Einsätze, Regeln |
-| `abwesenheiten.json` / `abwesenheiten_ksv.json` | Erfasste Abwesenheiten/Sonderwünsche (von der App gepflegt, nicht im Git) |
+| `abwesenheiten.json` / `abwesenheiten_ksv.json` | Einträge aus Schritt 1 und dem Jahresplan (Ferien von–bis) sowie die Feiertags-Einstellung – von der App gepflegt, nicht im Git |
 | `REGELN.md` / `REGELN_KSV.md` | Regelübersicht KSC / KSV in Tabellenform (KSV inkl. offene Punkte) |
-| `tests/` | `test_regeln.py` (KSC), `test_ksv.py` (KSV), `test_app.py` (Oberfläche, beide Teams) |
+| `tests/` | `test_regeln.py` (KSC), `test_ksv.py` (KSV), `test_feiertage.py` (Feiertage, beide Teams), `test_app.py` (Oberfläche, beide Teams) |
 | `requirements.txt`, `.streamlit/config.toml`, `.devcontainer/` | Deployment / Codespaces |
 
 Es gibt **keine Zustandsdatei**: Rotationen und Verteilung ergeben sich aus der
@@ -84,7 +86,8 @@ Wortlaut steht als `APP_TITEL` oben in `streamlit_app.py`.
    🌙 Frei *(KSV)*, 🕑 Termin, 🏠 Home Office, 📌 Aufgabe setzen) · Tage · Halbtag ·
    wie viele Wochen · Notiz. Die Zeile «→ …» zeigt vor dem Hinzufügen, was
    eingetragen wird. Einträge gelten ab der angezeigten KW und bleiben gespeichert,
-   bis sie entfernt werden.
+   bis sie entfernt werden. Ferien über mehrere Wochen und Feiertage kommen aus dem
+   **📆 Jahresplan** und stehen hier automatisch (mit 📆).
    - *Termin*: Halbtag bleibt leer, die Notiz steht im Plan.
    - *Aufgabe setzen*: eine Aufgabe fest eintragen (Auswahl oder eigener Code, z. B.
      `ERP`, `Schulung`, `Einführung`) – so werden auch die BackUp-Zeilen befüllt.
@@ -100,6 +103,31 @@ Wortlaut steht als `APP_TITEL` oben in `streamlit_app.py`.
   eigenen Text wie `KSV2 10.00`. Regelprüfung und Excel werden nachgezogen.
 - **⬇ Excel herunterladen** (oben rechts und beim Plan). KSV: Spalten A–L sind genau
   ein Wochenblock wie im Jahresplan und lassen sich dort direkt einfügen.
+- Hat sich seit dem Generieren etwas an den Einträgen oder Feiertagen **dieser** Woche
+  geändert (z. B. im Jahresplan), wird der Plan beim Öffnen automatisch neu erstellt.
+
+### 📆 Jahresplan – Ferien und Feiertage
+
+Für alles, was schon länger feststeht. Die Wochenplanung (Schritt 1–2) bleibt wie
+gehabt – für die nächste Woche lässt sich dort weiterhin alles einzeln anpassen.
+
+- **Übersicht** übers ganze Jahr: Personen × Kalenderwochen. Die Zahl sagt, wie viele
+  Arbeitstage jemand in der KW fehlt (kräftige Farbe = die ganze Woche; blau Ferien,
+  türkis Frei, rot krank, violett Termin/HO/Aufgabe); Maus über die Zelle = Details.
+  Oben die Feiertage 🎉, unten **«Plan geht auf?»**: Für jede kommende Woche rechnet die
+  App den Plan mit allen Einträgen durch – 🟢 geht auf · 🟠 knapp · 🔴 Regeln verletzt
+  (dann im Wochenplan von Hand anpassen). Die Woche oben ist hervorgehoben.
+- **Ferien oder Abwesenheit eintragen**: Wer · Was · **Von – Bis** · Halbtag · Notiz. Die
+  Vorschau zählt die Arbeitstage der Person (Teilzeit und Feiertage berücksichtigt).
+  Der Eintrag erscheint automatisch in jeder betroffenen Woche (Schritt 1 zeigt ihn mit 📆).
+- **🎉 Feiertage**: Liste der Schweizer Feiertage – pro Feiertag «ganzer Tag»,
+  «Vormittag», «Nachmittag» oder «–» (wird gearbeitet). Voreingestellt: Neujahr,
+  Berchtoldstag, Karfreitag, Ostermontag, Auffahrt, Pfingstmontag, 1. August,
+  Weihnachten, Stephanstag. Dazu **eigene freie Tage** (Brückentag, Betriebsausflug …).
+  An Feiertagen hat das ganze Team «Feiertag», es wird nichts geplant und keine
+  Besetzung geprüft; Ferien zählen dort nicht.
+- **⬇ Jahresplan als Excel**: Übersicht pro KW zum Ausdrucken, dazu alle Einträge
+  (mit Arbeitstagen) und die Feiertage als Liste.
 
 ### Team & Regeln (ohne Code)
 
@@ -147,7 +175,9 @@ Streamlit Cloud hat **kein dauerhaftes Dateisystem**: lokal gespeicherte
 
    «💾 Speichern» schreibt dann die Dateien des **aktuellen Teams** ins Repo
    (KSC: `team.json` + `abwesenheiten.json`, KSV: `team_ksv.json` +
-   `abwesenheiten_ksv.json`); Streamlit Cloud lädt die App danach neu.
+   `abwesenheiten_ksv.json` – darin auch Jahresplan und Feiertage); Streamlit Cloud
+   lädt die App danach neu. Gerade für den Jahresplan wichtig: nach dem Eintragen
+   speichern.
 2. **Ohne Token**: «💾 Speichern» schreibt nur auf den Server – Änderungen bleiben
    bis zum nächsten Neustart der App. Dauerhaft nur über das Repo.
 
@@ -197,6 +227,15 @@ weil man früher vom Telefon weg muss); manuell gesetzt erscheint ein Hinweis.
 
 ---
 
+## Was ist neu in Version 8.2 (Oktober 2026)?
+
+- **📆 Jahresplan**: Ferien und freie Tage von–bis eintragen, Übersicht übers ganze
+  Jahr mit Ampel «Plan geht auf?» pro Woche, Excel zum Ausdrucken.
+- **Feiertage** (`feiertage.py`): Schweizer Feiertage automatisch, einstellbar pro Team
+  (auch halbe Tage und eigene freie Tage). Beide Generatoren planen an Feiertagen nichts
+  und prüfen dort keine Besetzung – an allen anderen Tagen planen sie genau wie bisher.
+- Wochenplan wird automatisch neu erstellt, wenn sich Einträge oder Feiertage der Woche ändern.
+
 ## Was ist neu in Version 8.0 (Oktober 2026)?
 
 - **KSV-Team** in derselben App: Team-Umschalter oben links, Direktlink `?team=KSV`,
@@ -221,6 +260,11 @@ weil man früher vom Telefon weg muss); manuell gesetzt erscheint ein Hinweis.
 
 **KSV**: siehe Tabelle «Offene Punkte» in **REGELN_KSV.md** (u. a. Pensen, Redcare
 ganztags oder halbtags, GH, Melanie/Medine als Reserve).
+
+**Beide Teams – Feiertage** (📆 Jahresplan → Feiertage): Voreingestellt sind die neun
+verbreiteten Deutschschweizer Feiertage (siehe oben). Offen: Heiligabend und Silvester
+nachmittags frei? Fronleichnam (KSV 2026: die meisten ab 12 Uhr frei, zwei bis 14 Uhr)?
+1. Mai, Mariä Himmelfahrt, Allerheiligen, Mariä Empfängnis je nach Kanton.
 
 **KSC** (unverändert seit Version 7.0):
 

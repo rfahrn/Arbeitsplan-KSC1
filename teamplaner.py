@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Teamplaner – konfigurierbarer Wochenplaner (Version 1.0, Oktober 2026)
+Teamplaner – konfigurierbarer Wochenplaner (Version 1.1, Oktober 2026)
 =======================================================================
 Scheduler, Regelprüfung und Excel-Export für Teams, deren Regeln sich als
 «so viele Personen pro Tag / Halbtag für Aufgabe X» beschreiben lassen –
@@ -35,6 +35,9 @@ Planungsreihenfolge:
   3. Rest: Auffüll-Aufgabe (KSV2)
   4. Zusatztexte aus festen Einsätzen anhängen; Nicht-Arbeitstage = «Frei»
 
+Feiertage (feiertage.py) gehen allem vor: alle Anwesenden «Feiertag», an diesen
+Halbtagen wird nichts geplant und keine Besetzung geprüft.
+
 Das Modul importiert KEIN Streamlit und hat keine Nebenwirkungen: derselbe
 Montag + dieselbe Konfiguration ergeben immer denselben Plan.
 """
@@ -55,7 +58,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 # ============================================================
 # KONSTANTEN
@@ -84,7 +87,8 @@ DAUER_HILFE = {
 STUFEN = ["ja", "Reserve", "–"]
 
 # Abwesenheiten (fest eingebaut): Code → Farbe. Gross-/Kleinschreibung egal.
-ABWESEND = {"KRANK": "BFBFBF", "Ferien": "00B0F0", "Frei": "00B0F0"}
+FEIERTAG = "Feiertag"
+ABWESEND = {"KRANK": "BFBFBF", "Ferien": "00B0F0", "Frei": "00B0F0", FEIERTAG: "F2F2F2"}
 
 # Farben mit Namen (für die Auswahl in der App) – Excel-Standardfarben
 FARBEN: Dict[str, str] = {
@@ -271,7 +275,8 @@ def legend_items(cfg: dict) -> List[Tuple[str, str, str]]:
     """(Code, Bedeutung, Farbe) für Legende in App und Excel."""
     items = [(t["code"], t.get("bedeutung") or t["code"], t["farbe"]) for t in task_list(cfg) if t.get("code")]
     items += [("Frei", "frei (Teilzeit / Kompensation)", ABWESEND["Frei"]),
-              ("Ferien", "Ferien", ABWESEND["Ferien"]), ("KRANK", "krank", ABWESEND["KRANK"])]
+              ("Ferien", "Ferien", ABWESEND["Ferien"]), ("KRANK", "krank", ABWESEND["KRANK"]),
+              (FEIERTAG, "Feiertag – ganzes Team frei", ABWESEND[FEIERTAG])]
     return items
 
 
@@ -284,7 +289,7 @@ def editor_options(cfg: dict) -> List[str]:
         opts.append(t["code"])
         top = max(t["anzahl"].values()) if t.get("dauer") in AUTO_DAUER else 0
         opts += [f"{t['code']} {i}" for i in range(1, top + 1)] if top > 1 else []
-    return opts + ["Frei", "Ferien", "KRANK"]
+    return opts + ["Frei", "Ferien", "KRANK", FEIERTAG]
 
 
 # ── Prüfung der Konfiguration ─────────────────────────────────────────
@@ -651,6 +656,11 @@ class Schedule:
         self.notes: Dict[Tuple[str, int, int], str] = {}
         self.backup_tasks: Dict[Tuple[str, int, int], str] = {}
         self.conflicts: List[str] = []
+        self.feiertage: Dict[Tuple[int, int], str] = {}   # (Tag, Halbtag) → Name; ganzes Team frei
+
+    def offene_slots(self, day) -> List[int]:
+        """Halbtage des Tages, die kein Feiertag sind (normal: [0, 1])."""
+        return [s for s in range(2) if (day, s) not in self.feiertage]
 
     def assign(self, name, day, slot, task) -> bool:
         if name not in self.employees or (day, slot) in self.schedule[name]:
@@ -704,25 +714,37 @@ class Schedule:
 # ============================================================
 
 def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] = None,
-                   cfg: Optional[dict] = None, seed: Optional[int] = None) -> Schedule:
+                   cfg: Optional[dict] = None, seed: Optional[int] = None,
+                   feiertage: Optional[Dict[Tuple[int, int], str]] = None) -> Schedule:
     """Baut den Wochenplan.
 
     overrides: {(short, day, slot): task} – "KRANK"/"Ferien"/"Frei", "*Notiz" (Termin,
                Halbtag bleibt leer) oder ein beliebiger Code (HO, Einführung …).
                Einträge für BackUp-Namen landen 1:1 in sched.backup_tasks.
     seed:      Zufalls-Seed; Standard = ISO-Jahr*100 + ISO-KW (deterministisch).
+    feiertage: {(day, slot): Name} – ganzes Team frei (siehe feiertage.py).
     """
     cfg = normalize_config(cfg if cfg is not None else load_config())
     employees = create_employees(week_number, cfg)
     sched = Schedule(employees, week_number, week_start_date, cfg)
+    sched.feiertage = {(d, s): str(n) for (d, s), n in (feiertage or {}).items() if 0 <= d < 5 and s in (0, 1)}
+    fe = sched.feiertage
     order = [m["short"] for m in cfg["mitarbeiter"] if m["short"] in employees]
     backup_names = {b["short"] for b in cfg["backup_team"]}
     iso_year, iso_week, _ = week_start_date.isocalendar()
     rng = random.Random(seed if seed is not None else iso_year * 100 + iso_week)
 
-    # 0. Abwesenheiten / Sonderwünsche / BackUp-Einträge
+    # 0. Feiertage (ganzes Team frei), dann Abwesenheiten / Sonderwünsche / BackUp-Einträge
+    for (day, slot) in sorted(fe):
+        for name in order:
+            if employees[name].is_available(day, slot):
+                sched.force_assign(name, day, slot, FEIERTAG)
+        for name in backup_names:
+            sched.backup_tasks[(name, day, slot)] = FEIERTAG
     for (name, day, slot), task in (overrides or {}).items():
         task = task or ""
+        if (day, slot) in fe:
+            continue
         if name in employees:
             if task.startswith("*"):
                 sched.notes[(name, day, slot)] = task[1:] or "Termin"
@@ -774,7 +796,7 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
                 return sum(1 for d in range(day, 5) if t["anzahl"][DAY_KEYS[d]]
                            and all(sched.is_free(name, d, s) for s in slots))
 
-            if need > 0 and dauer == "ganzer Tag":
+            if need > 0 and dauer == "ganzer Tag" and not any((day, s) in fe for s in (0, 1)):
                 for _ in range(max(0, min(need - len(sched.holders(code, day, s)) for s in (0, 1)))):
                     chosen = None
                     for st in ("ja", "Reserve"):
@@ -791,7 +813,7 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
             if need > 0:
                 # Halbtags-Aufgaben – und Ganztags-Aufgaben, die niemand ganztags übernehmen kann
                 for s in DAUER_SLOTS[dauer]:
-                    while len(sched.holders(code, day, s)) < need:
+                    while (day, s) not in fe and len(sched.holders(code, day, s)) < need:
                         chosen = None
                         for st in ("ja", "Reserve"):
                             cands = [n for n in pool(st) if sched.is_free(n, day, s)]
@@ -852,7 +874,10 @@ def day_overview(sched: Schedule) -> List[Tuple[str, List[str]]]:
         for d in range(5):
             need = t["anzahl"][DAY_KEYS[d]]
             per = {s: [sched.employees[n].name for n in sched.holders(code, d, s)] for s in range(2)}
-            slots = DAUER_SLOTS[t["dauer"]]
+            slots = [s for s in DAUER_SLOTS[t["dauer"]] if (d, s) not in sched.feiertage]
+            if not slots:
+                cells.append(FEIERTAG)
+                continue
             if not need and not any(per.values()):
                 cells.append("–")
                 continue
@@ -898,6 +923,9 @@ def coverage_table(sched: Schedule) -> List[dict]:
     for d in range(5):
         for s in range(2):
             items = []
+            if (d, s) in sched.feiertage:
+                out.append({"day": DAYS[d], "slot": SLOTS[s], "items": items, "feiertag": sched.feiertage[(d, s)]})
+                continue
             for t in auto_tasks(sched.cfg):
                 if s not in DAUER_SLOTS[t["dauer"]]:
                     continue
@@ -919,6 +947,8 @@ def validate_schedule(sched: Schedule) -> List[str]:
     fill = cfg["regeln"].get("auffuellen")
     for d in range(5):
         for s in range(2):
+            if (d, s) in sched.feiertage:   # an Feiertagen wird keine Besetzung geprüft
+                continue
             for code, t in autos.items():
                 if s not in DAUER_SLOTS[t["dauer"]]:
                     continue
@@ -1017,9 +1047,11 @@ def write_excel(sched: Schedule, output) -> None:
         c.font = Font(**base_font, bold=True)
         c.border = border
         ws.cell(row=3, column=col).border = border
+    fe_tag = {d: n for (d, s), n in sorted(sched.feiertage.items())}
     for d in range(5):
         col = 3 + 2 * d
-        c = ws.cell(row=2, column=col, value=f"{DAYS[d]}\n{(start + timedelta(days=d)).strftime('%d.%m.%Y')}")
+        datum = (start + timedelta(days=d)).strftime('%d.%m.%Y')
+        c = ws.cell(row=2, column=col, value=f"{DAYS[d]}\n{datum}" + (f" · {fe_tag[d]}" if d in fe_tag else ""))
         c.font = Font(**base_font, bold=True)
         c.alignment = center
         ws.merge_cells(start_row=2, start_column=col, end_row=2, end_column=col + 1)
@@ -1111,7 +1143,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     monday = datetime.strptime(args.montag, "%Y-%m-%d") if args.montag else get_next_monday()
     kw = monday.isocalendar()[1]
     cfg = load_config(args.config)
-    sched = build_schedule(kw, monday, cfg=cfg)
+    import feiertage  # Schweizer Standard-Feiertage (in der App einstellbar)
+    sched = build_schedule(kw, monday, cfg=cfg, feiertage=feiertage.woche(feiertage.default(), monday))
     issues = validate_schedule(sched)
     out = args.out or f"Arbeitsplan_{cfg.get('team') or 'Team'}_KW{kw}_{monday.strftime('%Y%m%d')}.xlsx"
     write_excel(sched, out)

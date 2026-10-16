@@ -27,6 +27,8 @@ Regelstand (Rückmeldungen des Teams, Oktober 2026):
 - Wochenaufgaben Direkt/ONB/BTM: je 1 Person, nie dieselbe doppelt,
   ganzwöchig Abwesende werden übersprungen
 - BackUp Team (Stephi, SPP mit "ERP", KSC Spezial, KSV): nur manuell befüllt
+- Feiertage (v8.2): build_schedule(…, feiertage={(Tag, Halbtag): Name}) – alle
+  Anwesenden haben "Feiertag", es wird nichts geplant und nichts geprüft
 """
 
 from __future__ import annotations
@@ -111,7 +113,8 @@ DEFAULT_ROTATION = {
 DEFAULT_OFFSETS = ["tv", "phc_montag", "phc_freitag", "schalter", "labor",
                    "Direkt", "ONB", "BTM"]
 
-ABSENT_TASKS = ("KRANK", "FERIEN", "Krankheit")
+FEIERTAG = "Feiertag"
+ABSENT_TASKS = ("KRANK", "FERIEN", "Krankheit", FEIERTAG)
 
 # Farben für Aufgaben (Excel-Zellen und Web-Vorschau) – nach Referenzvorlage
 TASK_COLORS = {
@@ -676,6 +679,24 @@ class Schedule:
         self.notes: Dict[Tuple[str, int, int], str] = {}
         self.backup_tasks: Dict[Tuple[str, int, int], str] = {}
         self.conflicts: List[str] = []
+        self.feiertage: Dict[Tuple[int, int], str] = {}   # (Tag, Halbtag) → Name; ganzes Team frei
+
+    # --- Feiertage -------------------------------------------------------
+    def offene_slots(self, day) -> List[int]:
+        """Halbtage des Tages, die kein Feiertag sind (normal: [0, 1])."""
+        return [s for s in range(2) if (day, s) not in self.feiertage]
+
+    def is_feiertag(self, day) -> bool:
+        return not self.offene_slots(day)
+
+    def is_free_open(self, name, day) -> bool:
+        """Wie is_free_day – an einem halben Feiertag zählt nur der offene Halbtag."""
+        slots = self.offene_slots(day)
+        return bool(slots) and all(self.is_free(name, day, s) for s in slots)
+
+    def is_present_open(self, name, day) -> bool:
+        slots = self.offene_slots(day)
+        return bool(slots) and all(self.is_present(name, day, s) for s in slots)
 
     # --- Zuweisung -------------------------------------------------------
     def _count(self, day, slot, task):
@@ -750,7 +771,8 @@ class Schedule:
 # ============================================================
 
 def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] = None,
-                   cfg: Optional[dict] = None, seed: Optional[int] = None) -> Schedule:
+                   cfg: Optional[dict] = None, seed: Optional[int] = None,
+                   feiertage: Optional[Dict[Tuple[int, int], str]] = None) -> Schedule:
     """Baut den Wochenplan.
 
     overrides: {(short, day, slot): task}  – "KRANK"/"FERIEN", "*Notiz" (Termin,
@@ -758,10 +780,13 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
                Einträge für BackUp-Namen landen 1:1 in sched.backup_tasks.
     cfg:       Konfiguration (team.json); None = Datei neben diesem Modul laden.
     seed:      Zufalls-Seed; Standard = ISO-Jahr*100 + ISO-KW (deterministisch).
+    feiertage: {(day, slot): Name} – ganzes Team frei (siehe feiertage.py): alle
+               Anwesenden "Feiertag", keine Aufgaben, keine Besetzungsregeln.
     """
     cfg = normalize_config(cfg if cfg is not None else load_config())
     employees = create_employees(week_number, cfg)
     sched = Schedule(employees, week_number, week_start_date, cfg)
+    sched.feiertage = {(d, s): str(n) for (d, s), n in (feiertage or {}).items() if 0 <= d < 5 and s in (0, 1)}
     rules = cfg["regeln"]
     rot = cfg["rotation"]
     off = rot["offset"]
@@ -788,10 +813,20 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
         return rng.choice([n for n in pool if used_counter.get(n, 0) == best])
 
     # ════════════════════════════════════════════════════════════
-    # 0. OVERRIDES (Krank / Ferien / Termin / Sonderwunsch / BackUp)
+    # 0. FEIERTAGE (ganzes Team) und OVERRIDES (Krank / Ferien /
+    #    Termin / Sonderwunsch / BackUp) – Feiertage gehen vor
     # ════════════════════════════════════════════════════════════
+    for (day, slot) in sorted(sched.feiertage):
+        for name in order:
+            if employees[name].is_available(day, slot):
+                sched.force_assign(name, day, slot, FEIERTAG)
+        for name in backup_names:
+            sched.backup_tasks[(name, day, slot)] = FEIERTAG
+
     for (name, day, slot), task in (overrides or {}).items():
         task = task or ""
+        if (day, slot) in sched.feiertage:
+            continue
         if name in employees:
             if task.startswith("*"):
                 sched.notes[(name, day, slot)] = task[1:] or "Termin"
@@ -814,7 +849,7 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
 
     # 2. LABOR Mi NM – zwei Personen im Wochenwechsel
     labor = [n for n in rot["labor_mi_nm"] if n in employees]
-    if labor:
+    if labor and (2, 1) not in sched.feiertage:
         start = (widx + off["labor"]) % len(labor)
         for i in range(len(labor)):
             cand = labor[(start + i) % len(labor)]
@@ -850,16 +885,19 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
         tv_start = (widx * 5 + off["tv"]) % len(tv_list)
         tv_count: Dict[str, int] = {n: 0 for n in tv_list}
         for day in range(5):
+            if sched.is_feiertag(day):
+                sched.tagesverantwortung[day] = FEIERTAG
+                continue
             idx = (tv_start + day) % len(tv_list)
             planned = tv_list[idx]
             chosen = None
-            if sched.is_present_day(planned, day) and sched.is_free_day(planned, day):
+            if sched.is_present_open(planned, day) and sched.is_free_open(planned, day):
                 chosen = planned
             else:
                 # Vertretung: verfügbare TL mit den wenigsten TV-Tagen diese Woche,
                 # bei Gleichstand in Rotationsreihenfolge
                 cands = [tv_list[(idx + i) % len(tv_list)] for i in range(1, len(tv_list))]
-                cands = [c for c in cands if sched.is_present_day(c, day) and sched.is_free_day(c, day)]
+                cands = [c for c in cands if sched.is_present_open(c, day) and sched.is_free_open(c, day)]
                 if cands:
                     chosen = min(cands, key=lambda c: tv_count[c])
             if chosen:
@@ -910,6 +948,9 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
     phc_fr = [n for n in rot["phc_freitag_wechsel"] if n in employees]
 
     for day in range(5):
+        if (day, 1) in sched.feiertage:          # 18-Uhr-Liste gibt es nur, wenn der Nachmittag offen ist
+            sched.phc_liste[day] = FEIERTAG
+            continue
         if day == 0 and phc_mo:
             idx = (widx + off["phc_montag"]) % len(phc_mo)
             planned = phc_mo[idx]
@@ -989,9 +1030,12 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
             stufen += [(other_grp, "Ersatz aus anderer Gruppe")]
         sch_used: set = set()
         for day in range(5):
+            if sched.is_feiertag(day):
+                sched.schalter[day] = FEIERTAG
+                continue
             chosen = None
             for grp, note in stufen:
-                cands = [n for n in grp if n not in sch_used and sched.is_free_day(n, day)]
+                cands = [n for n in grp if n not in sch_used and sched.is_free_open(n, day)]
                 if cands:
                     chosen = rng.choice(cands)
                     if note:
@@ -1011,8 +1055,11 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
     # ════════════════════════════════════════════════════════════
     tpa_used: Dict[str, int] = {}
     for day in range(5):
+        if sched.is_feiertag(day):
+            sched.tagespa[day] = FEIERTAG
+            continue
         cands = [n for n in order if employees[n].can("TPA") and not employees[n].is_tl
-                 and employees[n].regulaer and sched.is_free_day(n, day)]
+                 and employees[n].regulaer and sched.is_free_open(n, day)]
         name = pick(cands, tpa_used)
         if name:
             sched.assign(name, day, 0, "TAGES PA")
@@ -1028,12 +1075,16 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
     # ════════════════════════════════════════════════════════════
     erf9_used: Dict[str, int] = {}
     for day in range(5):
-        if any("ERF9" in sched.get_task(n, day, 0) for n in employees):
-            holder = next(n for n in employees if "ERF9" in sched.get_task(n, day, 0))
+        if sched.is_feiertag(day):
+            sched.erf9[day] = FEIERTAG
+            continue
+        s0 = sched.offene_slots(day)[0]
+        if any("ERF9" in sched.get_task(n, day, s0) for n in employees):
+            holder = next(n for n in employees if "ERF9" in sched.get_task(n, day, s0))
             sched.erf9[day] = holder
             continue
         cands = [n for n in order if employees[n].can("ERF9") and employees[n].regulaer
-                 and sched.is_free_day(n, day)]
+                 and sched.is_free_open(n, day)]
         name = pick(cands, erf9_used)
         if name:
             sched.assign(name, day, 0, "ERF9")
@@ -1083,6 +1134,8 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
         return emp.can("PO") and not emp.is_tl and emp.regulaer and sched.is_free(name, day, 0)
 
     for day in range(5):
+        if (day, 0) in sched.feiertage:          # Postöffnung nur, wenn der Vormittag offen ist
+            sched.po_liste[day] = FEIERTAG
         if day not in sched.po_liste:
             cands = [n for n in order if po_ok(n, day) and employees[n].can("Scanning")
                      and sched.phc_liste.get(day) != n]
@@ -1098,7 +1151,7 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
             else:
                 sched.po_liste[day] = "⚠️ OFFEN"
                 sched.conflicts.append(f"❌ Postöffnung {DAYS[day]} VM: Niemand verfügbar!")
-        for _ in range(int(rules["po_zusatz_vm"])):
+        for _ in range(0 if (day, 0) in sched.feiertage else int(rules["po_zusatz_vm"])):
             cands = [n for n in order if po_ok(n, day)]
             name = None
             if day == 1 and po_pref in cands:
@@ -1110,7 +1163,7 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
             sched.assign(name, day, 0, "PO")
             sched.po_zusatz[day].append(name)
             po_used[name] = po_used.get(name, 0) + 1
-        if rules["scan_nm_ersatz_wenn_aushilfe_fehlt"] and not any(
+        if (day, 1) not in sched.feiertage and rules["scan_nm_ersatz_wenn_aushilfe_fehlt"] and not any(
                 employees[n].aushilfe and is_scan_task(sched.get_task(n, day, 1)) for n in employees):
             cands = [n for n in order if employees[n].can("Scanning") and employees[n].regulaer
                      and not employees[n].is_tl and sched.is_free(n, day, 1)
@@ -1127,7 +1180,7 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
     # ════════════════════════════════════════════════════════════
     erf8_used: Dict[str, int] = {}
     for day in range(5):
-        if sched.erf8_assigned[day]:
+        if sched.erf8_assigned[day] or (day, 1) in sched.feiertage:
             continue
         cands = [n for n in order if employees[n].can("ERF8") and employees[n].regulaer
                  and sched.is_free(n, day, 1)]
@@ -1163,6 +1216,8 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
 
     for day in range(5):
         for slot in range(2):
+            if (day, slot) in sched.feiertage:
+                continue
             target = int(rules["tel_montag_vm"]) if (day == 0 and slot == 0) else int(rules["tel_sonst"])
             if slot == 1 and tpa_mode == "immer":
                 tpa_mit_tel(day)
@@ -1191,7 +1246,7 @@ def build_schedule(week_number: int, week_start_date, overrides: Optional[dict] 
     for day in range(5):
         for slot in range(2):
             needed = int(rules["abkl_pro_halbtag"]) - sched.abkl_count[day][slot]
-            if needed <= 0:
+            if needed <= 0 or (day, slot) in sched.feiertage:
                 continue
             avail = [n for n in sched.get_available(day, slot)
                      if employees[n].regulaer and "ABKL" not in sched.get_task(n, day, 1 - slot)]
@@ -1292,10 +1347,13 @@ def validate_schedule(sched: Schedule) -> List[str]:
     rules = sched.cfg["regeln"]
     rot = sched.cfg["rotation"]
     tag_ausschluss = {DAY_KEYS.index(k): set(v) for k, v in rot["phc_tag_ausschluss"].items() if k in DAY_KEYS}
+    fe = sched.feiertage   # an Feiertagen wird keine Besetzung geprüft
 
     # TEL / ABKL Mindestbesetzung
     for d in range(5):
         for s in range(2):
+            if (d, s) in fe:
+                continue
             target = int(rules["tel_montag_vm"]) if (d == 0 and s == 0) else int(rules["tel_sonst"])
             if sched.tel_count[d][s] < target:
                 issues.append(f"❌ {DAYS[d]} {SLOTS[s]} TEL: {sched.tel_count[d][s]}/{target}")
@@ -1304,15 +1362,18 @@ def validate_schedule(sched: Schedule) -> List[str]:
 
     # ERF8, PO, TAGES PA, ERF9 pro Tag
     for d in range(5):
-        if not sched.erf8_assigned[d]:
+        if not sched.erf8_assigned[d] and (d, 1) not in fe:
             issues.append(f"❌ {DAYS[d]} ERF8: Nicht besetzt")
         po = sched.po_liste.get(d, "")
-        if not po or po.startswith("⚠"):
+        if (not po or po.startswith("⚠")) and (d, 0) not in fe:
             issues.append(f"❌ {DAYS[d]} VM Postöffnung (PO/SCAN): Nicht besetzt")
+        if sched.is_feiertag(d):
+            continue
         tpa = sched.tagespa.get(d, "")
         if not tpa or tpa.startswith("⚠"):
             issues.append(f"❌ {DAYS[d]} TAGES PA: Nicht besetzt")
-        if not any("ERF9" in sched.get_task(n, d, 0) for n in emps):
+        s0 = sched.offene_slots(d)[0]
+        if not any("ERF9" in sched.get_task(n, d, s0) for n in emps):
             issues.append(f"❌ {DAYS[d]} ERF9: Nicht besetzt")
 
     # Halbtags-Regeln & Ganztags-Regeln pro Person
@@ -1354,7 +1415,7 @@ def validate_schedule(sched: Schedule) -> List[str]:
     for d in range(5):
         tv = sched.tagesverantwortung.get(d, "")
         if tv in emps:
-            for s in range(2):
+            for s in sched.offene_slots(d):
                 task = sched.get_task(tv, d, s)
                 if task and task != "TL/Q":
                     issues.append(f"⚠️ {DAYS[d]} {SLOTS[s]}: TV {tv} hat noch {task} – sollte TL/Q sein")
@@ -1414,6 +1475,10 @@ def coverage_table(sched: Schedule) -> List[dict]:
     out = []
     for d in range(5):
         for s in range(2):
+            if (d, s) in sched.feiertage:
+                out.append({"day": DAYS[d], "slot": SLOTS[s], "tel": 0, "tel_target": 0, "abkl": 0,
+                            "abkl_target": 0, "tel_ok": True, "abkl_ok": True, "feiertag": sched.feiertage[(d, s)]})
+                continue
             target = int(rules["tel_montag_vm"]) if (d == 0 and s == 0) else int(rules["tel_sonst"])
             out.append({
                 "day": DAYS[d], "slot": SLOTS[s],
@@ -1541,8 +1606,9 @@ def write_excel(sched: Schedule, output) -> None:
     # ── Header (Zeilen 10–11) ──────────────────────────────────────
     row = 10
     headers = ["Name", "%"]
-    for day in DAYS:
-        headers.extend([day, ""])
+    fe_tag = {d: n for (d, s), n in sorted(sched.feiertage.items())}
+    for d, day in enumerate(DAYS):
+        headers.extend([f"{day} ({fe_tag[d]})" if d in fe_tag else day, ""])
     headers.extend(["Wochen Aufgabe", "Bemerkungen"])
     for col, val in enumerate(headers, 1):
         c = ws.cell(row=row, column=col, value=val)
@@ -1663,7 +1729,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     monday = datetime.strptime(args.montag, "%Y-%m-%d") if args.montag else get_next_monday()
     kw = monday.isocalendar()[1]
     cfg = load_config(args.config)
-    sched = build_schedule(kw, monday, cfg=cfg)
+    import feiertage  # Schweizer Standard-Feiertage (in der App einstellbar)
+    sched = build_schedule(kw, monday, cfg=cfg, feiertage=feiertage.woche(feiertage.default(), monday))
     issues = validate_schedule(sched)
     out = args.out or f"Arbeitsplan_KW{kw}_{monday.strftime('%Y%m%d')}.xlsx"
     write_excel(sched, out)

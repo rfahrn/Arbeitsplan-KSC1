@@ -1,4 +1,4 @@
-# Regeln Arbeitsplan KSC (Version 7.0, Oktober 2026)
+# Regeln Arbeitsplan KSC (Version 8.2, Oktober 2026)
 
 > `arbeitskalender.py` setzt diese Regeln um; wer was darf und alle Fixeinsätze
 > stehen in `team.json` (bearbeitbar in der App unter «⚙ Team & Regeln»).
@@ -109,7 +109,9 @@ BackUp Team (nur manuell): Stephi R. · Sabrina D. (ERP) · Brigitte F. (ERP) ·
 | Home Office | `HO` | Person arbeitet im HO, bekommt keine andere Aufgabe |
 | Custom | beliebiger Task-Code | z. B. `ERP`, `KSV` für BackUp-Zeilen |
 
-Jeder Eintrag gilt für «Anzahl Wochen» ab der angezeigten KW.
+Jeder Eintrag gilt für «Anzahl Wochen» ab der angezeigten KW. Ferien über mehrere
+Wochen (von–bis) trägt man im **📆 Jahresplan** ein – sie gelten automatisch für jede
+betroffene Woche.
 
 ## 6) Regelprüfung nach dem Planen
 
@@ -117,3 +119,19 @@ Jeder Eintrag gilt für «Anzahl Wochen» ab der angezeigten KW.
 Halbtags-Regeln, PHC-Ausschlüsse, Rollen-Berechtigungen – auch bei manuellen Einträgen),
 ⚠️ = Soll-Regel (ERF9/TPA/Schalter halbtags, PO/TEL NM, Scanning-Limit, TL mit Ämtli, TL ohne/zu viel TEL),
 ℹ️ = Vertretung / Rotation (TL abwesend, Schalter-Ersatz aus anderer Gruppe, Wochenaufgabe übersprungen).
+
+## 7) Feiertage (📆 Jahresplan → Feiertage)
+
+An einem Feiertag hat das ganze Team frei: alle, die laut Stammdaten arbeiten würden,
+haben `Feiertag` (rot wie in der Vorlage), die BackUp-Zeilen ebenfalls. Es wird nichts
+geplant und keine Besetzung geprüft; Abwesenheiten zählen an Feiertagen nicht.
+
+| Feiertag | Wirkung |
+|---|---|
+| ganzer Tag | keine Tagesverantwortung, 18-Uhr-Liste, TAGES PA, Schalter, ERF9, PO, ERF8, TEL/ABKL |
+| nur Nachmittag (z. B. Heiligabend) | Vormittag normal (TV als TL/Q, PO, TEL/ABKL); keine 18-Uhr-Liste, kein ERF8, kein Labor; TAGES PA / Schalter / ERF9 nur am Vormittag |
+| nur Vormittag | Nachmittag normal; keine Postöffnung |
+
+Voreingestellt: Neujahr, Berchtoldstag, Karfreitag, Ostermontag, Auffahrt,
+Pfingstmontag, 1. August, Weihnachten, Stephanstag – einstellbar, dazu eigene freie Tage.
+Ohne Feiertag in der Woche plant der Generator genau wie vorher.
