@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
+import textwrap
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -234,3 +237,37 @@ def test_plan_wird_nach_neuem_eintrag_aktualisiert(daten):
     assert not at.exception, [e.value for e in at.exception]
     sched = at.session_state["teams"]["KSV"]["sched"]
     assert all(sched.get_task("Maria", d, s) == "Ferien" for d in range(5) for s in (0, 1))
+
+
+def test_geaenderte_module_werden_nachgeladen(tmp_path):
+    """Streamlit Cloud liest nach einem Push nur streamlit_app.py neu ein – die schon geladenen Generatoren
+    müssen nachgeladen werden (sonst «build_schedule() got an unexpected keyword argument 'feiertage'»)."""
+    app = tmp_path / "app"
+    app.mkdir()
+    for name in ("streamlit_app.py", "arbeitskalender.py", "teamplaner.py", "feiertage.py", "team.json", "team_ksv.json"):
+        shutil.copy(ROOT / name, app / name)
+    skript = textwrap.dedent(f"""
+        import os, sys, time
+        sys.path.insert(0, {str(app)!r})
+        import arbeitskalender, teamplaner                    # «alte» Module laufen schon (wie vor dem Push)
+        from streamlit.testing.v1 import AppTest
+        os.environ.update(KSC_TEAM_CONFIG={str(app / "team.json")!r}, KSV_TEAM_CONFIG={str(app / "team_ksv.json")!r},
+                          KSC_ABSENCES={str(app / "a.json")!r}, KSV_ABSENCES={str(app / "b.json")!r})
+
+        def push(datei, zeile):                               # Datei ändert sich auf der Festplatte (git pull)
+            time.sleep(0.05)
+            with open(os.path.join({str(app)!r}, datei), "a", encoding="utf-8") as fh:
+                fh.write(chr(10) + zeile + chr(10))
+
+        push("teamplaner.py", "NEU_1 = True")
+        at = AppTest.from_file({str(app / "streamlit_app.py")!r}, default_timeout=60)
+        at.run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert teamplaner.NEU_1                               # beim ersten Lauf nachgeladen
+        push("arbeitskalender.py", "NEU_2 = True")
+        at.run()
+        assert arbeitskalender.NEU_2 and not at.exception     # später geändert → wieder nachgeladen
+        print("ok")
+    """)
+    r = subprocess.run([sys.executable, "-c", skript], capture_output=True, text=True, timeout=180)
+    assert r.returncode == 0 and "ok" in r.stdout, r.stdout[-2000:] + r.stderr[-2000:]

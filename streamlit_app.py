@@ -37,6 +37,7 @@ from __future__ import annotations
 import base64
 import copy
 import hashlib
+import importlib
 import inspect
 import json
 import os
@@ -57,6 +58,23 @@ if str(BASE_DIR) not in sys.path:
 import arbeitskalender as ak  # noqa: E402
 import feiertage as ft  # noqa: E402
 import teamplaner as tp  # noqa: E402
+
+
+def _module_aktualisieren(*mods: ModuleType) -> None:
+    """Nach einem Update (Push) liest Streamlit Cloud nur diese Datei neu ein – Module, die schon im
+    Speicher sind (die Generatoren), blieben sonst auf dem alten Stand, und App und Generator passen
+    nicht mehr zusammen («unexpected keyword argument»). Darum: geänderte Module neu laden."""
+    for mod in mods:
+        try:
+            stand = Path(mod.__file__).stat().st_mtime_ns
+        except (OSError, TypeError):
+            continue
+        if getattr(mod, "_app_stand", None) != stand:   # fehlt beim ersten Mal (auch: von alter App geladen)
+            importlib.reload(mod)
+            mod._app_stand = stand
+
+
+_module_aktualisieren(ft, ak, tp)
 from arbeitskalender import (  # noqa: E402
     DAYS, DAY_KEYS, HALBTAG_WERTE, NUR_MANUELL, ROLLEN, SCHALTER_CODES,
     SCHALTER_RESERVE_MODI, SLOTS, SLOT_KEYS, TPA_TEL_MODI,
