@@ -4,3 +4,4 @@ output/
 *.xlsx
 .streamlit/secrets.toml
 abwesenheiten.json
+abwesenheiten_ksv.json

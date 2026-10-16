@@ -1,0 +1,345 @@
+{
+  "_hinweis": "Stammdaten des KSV-Teams (abgeleitet aus dem Arbeitsplan 2026, KW 4–44). Bearbeiten über «Team & Regeln» in der App (Team KSV) oder direkt hier. Aufgaben: Reihenfolge = Wichtigkeit; dauer = ganzer Tag | Halbtag | nur VM | nur NM | nur manuell; anzahl = Personen pro Tag (ganzer Tag) bzw. pro Halbtag. Wer darf was: kann = ja, reserve = nur wenn sonst niemand frei ist.",
+  "version": "1.0",
+  "team": "KSV",
+  "regeln": {
+    "auffuellen": "KSV2",
+    "frei_anzeigen": true
+  },
+  "aufgaben": [
+    {
+      "code": "contact",
+      "bedeutung": "contact – ganzer Tag",
+      "farbe": "FF0000",
+      "dauer": "ganzer Tag",
+      "anzahl": {
+        "Mo": 2,
+        "Di": 1,
+        "Mi": 1,
+        "Do": 1,
+        "Fr": 1
+      }
+    },
+    {
+      "code": "KSV1",
+      "bedeutung": "KSV1 – ganzer Tag",
+      "farbe": "92D050",
+      "dauer": "ganzer Tag",
+      "anzahl": {
+        "Mo": 1,
+        "Di": 1,
+        "Mi": 1,
+        "Do": 1,
+        "Fr": 1
+      }
+    },
+    {
+      "code": "Redcare",
+      "bedeutung": "Redcare – ganzer Tag (seit KW 32)",
+      "farbe": "FFFF00",
+      "dauer": "ganzer Tag",
+      "anzahl": {
+        "Mo": 1,
+        "Di": 1,
+        "Mi": 1,
+        "Do": 1,
+        "Fr": 1
+      }
+    },
+    {
+      "code": "KD Komm",
+      "bedeutung": "Kundenkommunikation – pro Halbtag",
+      "farbe": "FFC000",
+      "dauer": "Halbtag",
+      "anzahl": {
+        "Mo": 1,
+        "Di": 1,
+        "Mi": 1,
+        "Do": 1,
+        "Fr": 1
+      }
+    },
+    {
+      "code": "KSV2",
+      "bedeutung": "KSV2 – alle übrigen Halbtage",
+      "farbe": "00B050",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "Quality",
+      "bedeutung": "Quality",
+      "farbe": "7030A0",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "KTG",
+      "bedeutung": "Kein Tagesgeschäft",
+      "farbe": "7030A0",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "Tel",
+      "bedeutung": "Telefon",
+      "farbe": "FFC000",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "Pö KSV",
+      "bedeutung": "Postöffnung KSV",
+      "farbe": "FFFF00",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "HO",
+      "bedeutung": "Home Office",
+      "farbe": "7030A0",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "Einführung",
+      "bedeutung": "Einführung neue Mitarbeitende",
+      "farbe": "FFEB9C",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "Schulung",
+      "bedeutung": "Schulung",
+      "farbe": "7030A0",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    },
+    {
+      "code": "Sitzung",
+      "bedeutung": "Sitzung",
+      "farbe": "7030A0",
+      "dauer": "nur manuell",
+      "anzahl": {
+        "Mo": 0,
+        "Di": 0,
+        "Mi": 0,
+        "Do": 0,
+        "Fr": 0
+      }
+    }
+  ],
+  "mitarbeiter": [
+    {
+      "short": "Medine",
+      "name": "Medine A.",
+      "pct": 50,
+      "aktiv": true,
+      "kann": [
+        "contact",
+        "KSV1",
+        "Redcare"
+      ],
+      "reserve": [
+        "KD Komm"
+      ],
+      "anwesend": {
+        "Mi": "NM",
+        "Do": "frei",
+        "Fr": "frei"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Mi",
+          "halbtag": "NM",
+          "task": "",
+          "zusatz": "12-16",
+          "kw": "ungerade"
+        },
+        {
+          "tag": "Mi",
+          "halbtag": "NM",
+          "task": "",
+          "zusatz": "13-17",
+          "kw": "gerade"
+        }
+      ],
+      "farbe": "FFC7CE",
+      "bemerkung": "seit KW 34: Mo + Di ganztags, Mi Nachmittag (12–16 / 13–17 im Wochenwechsel); Pensum angenommen"
+    },
+    {
+      "short": "Joy",
+      "name": "Joy B.",
+      "pct": 100,
+      "aktiv": true,
+      "kann": [
+        "contact",
+        "KSV1",
+        "Redcare",
+        "KD Komm"
+      ],
+      "reserve": [],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "farbe": "C6EFCE",
+      "bemerkung": ""
+    },
+    {
+      "short": "Jana",
+      "name": "Jana",
+      "pct": 100,
+      "aktiv": true,
+      "kann": [
+        "contact",
+        "KSV1",
+        "Redcare",
+        "KD Komm"
+      ],
+      "reserve": [],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "farbe": "FFEB9C",
+      "bemerkung": "neu seit KW 27 (Einführung KW 27–29); Nachname-Initial ergänzen"
+    },
+    {
+      "short": "Maria",
+      "name": "Maria G.",
+      "pct": 100,
+      "aktiv": true,
+      "kann": [
+        "contact",
+        "KSV1",
+        "Redcare",
+        "KD Komm"
+      ],
+      "reserve": [],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "farbe": "BDD7EE",
+      "bemerkung": ""
+    },
+    {
+      "short": "Kim",
+      "name": "Kim K.",
+      "pct": 80,
+      "aktiv": true,
+      "kann": [
+        "contact",
+        "Redcare",
+        "KD Komm"
+      ],
+      "reserve": [],
+      "anwesend": {
+        "Mi": "VM",
+        "Fr": "VM"
+      },
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "farbe": "D9D2E9",
+      "bemerkung": "Mi + Fr Nachmittag frei; kein KSV1 (im Plan 2026 nie); Pensum angenommen"
+    },
+    {
+      "short": "Melanie",
+      "name": "Melanie R.",
+      "pct": 100,
+      "aktiv": true,
+      "kann": [
+        "KSV1",
+        "Redcare",
+        "KD Komm"
+      ],
+      "reserve": [
+        "contact"
+      ],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [],
+      "farbe": "FCE4D6",
+      "bemerkung": "contact nur als Reserve (im Plan 2026 selten)"
+    },
+    {
+      "short": "Pia",
+      "name": "Pia S.",
+      "pct": 100,
+      "aktiv": true,
+      "kann": [
+        "contact",
+        "KSV1",
+        "Redcare",
+        "KD Komm"
+      ],
+      "reserve": [],
+      "anwesend": {},
+      "frei_alle_2_wochen": null,
+      "fix": [
+        {
+          "tag": "Di",
+          "halbtag": "VM",
+          "task": "Quality",
+          "zusatz": ""
+        },
+        {
+          "tag": "Do",
+          "halbtag": "VM",
+          "task": "Quality",
+          "zusatz": ""
+        }
+      ],
+      "farbe": "E2EFDA",
+      "bemerkung": "Quality Di + Do Vormittag"
+    }
+  ],
+  "backup_team": []
+}
