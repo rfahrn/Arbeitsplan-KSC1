@@ -171,6 +171,7 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg); color: v
 
 .st-key-topbar { background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--team);
   border-radius: 12px; padding: 10px 14px 6px; margin-bottom: 4px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+.st-key-stepbar { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--team); color: white;
   display: grid; place-items: center; font-size: 19px; flex-shrink: 0; }
@@ -180,11 +181,10 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg); color: v
 .team-fixed { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--team-soft); color: var(--team);
   font-weight: 800; font-size: 13px; letter-spacing: .5px; }
 
-.kw-pill { display: flex; align-items: center; gap: 4px; background: var(--surface-2);
-  border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
-.kw-center { padding: 3px 10px; min-width: 150px; text-align: center; }
-.kw-big { display:block; font-size: 14px; font-weight: 700; color: var(--heading); }
-.kw-range { display:block; font-size: 11px; color: var(--text-mute); margin-top: 1px; }
+.st-key-week_offset [data-baseweb="select"] > div, .st-key-week_offset [role="group"] {
+  background: var(--surface-2); border-radius: 10px; cursor: pointer; }
+.st-key-week_offset input, .st-key-week_offset [data-baseweb="select"] { font-weight: 700; color: var(--heading);
+  font-size: 13.5px; text-overflow: ellipsis; }
 
 div.stButton button[kind="primary"], div.stFormSubmitButton button[kind="primaryFormSubmit"] { background: var(--primary) !important; border: 1px solid var(--primary) !important;
   color: white !important; font-weight: 600 !important; border-radius: 9px !important; }
@@ -571,6 +571,8 @@ if TEAM not in st.session_state.teams:
 ts: dict = st.session_state.teams[TEAM]
 
 st.session_state.setdefault("week_offset", 0)
+if st.session_state.week_offset not in range(-1, 53):
+    st.session_state.week_offset = min(52, max(-1, int(st.session_state.week_offset)))
 st.session_state.setdefault("step", 1)
 st.session_state.setdefault("save_msgs", [])
 if not FIXED_TEAM and not TEAM_BIND and st.query_params.get("team") != TEAM:
@@ -743,20 +745,33 @@ def _goto(step: int) -> None:
     st.session_state.step = step
 
 
+WOCHEN_AUSWAHL = list(range(-1, 53))   # laufende Woche bis 52 Wochen im Voraus (0 = nächste Woche)
+
+
+def week_label(offset: int) -> str:
+    monday = ak.get_next_monday() + timedelta(weeks=offset)
+    friday = monday + timedelta(days=4)
+    tage = (f"{monday:%d.}–{friday:%d.%m.}" if monday.month == friday.month
+            else f"{monday:%d.%m.}–{friday:%d.%m.}")
+    wann = {-1: " · diese Woche", 0: " · nächste Woche"}.get(offset, "")
+    return f"KW {monday.isocalendar()[1]} · {tage}{wann}"
+
+
 def _week(delta: int) -> None:
-    st.session_state.week_offset = max(-1, st.session_state.week_offset + delta)
+    st.session_state.week_offset = min(WOCHEN_AUSWAHL[-1], max(WOCHEN_AUSWAHL[0], st.session_state.week_offset + delta))
 
 
 with st.container(key="topbar"):
-    hcol = st.columns([2.0, 1.15, 3.5, 2.6, 1.6], vertical_alignment="center")
-    with hcol[0]:
+    # Zeile 1 – worum geht es: Team und Woche, dazu die Hauptaktion
+    r1 = st.columns([2.2, 1.45, 4.55, 1.8], vertical_alignment="center")
+    with r1[0]:
         st.markdown(
             f'<div class="brand"><div class="brand-icon">📅</div><div>'
             f'<div class="brand-title">{APP_TITEL} <span class="team">{TEAM}</span></div>'
             f'<div class="brand-sub">{html_escape(T.untertitel)}</div></div></div>',
             unsafe_allow_html=True,
         )
-    with hcol[1]:
+    with r1[1]:
         team_help = ("Team wechseln. Jedes Team hat eigene Personen, Regeln und Abwesenheiten. "
                      "Direktlink für ein Team: Adresse mit ?team=KSV bzw. ?team=KSC.")
         if FIXED_TEAM:
@@ -768,8 +783,28 @@ with st.container(key="topbar"):
             st.session_state.team_pick = TEAM
             st.segmented_control("Team", list(TEAMS), key="team_pick", on_change=_switch_team,
                                  label_visibility="collapsed", help=team_help)
-    with hcol[2]:
-        s1, s2, s3 = st.columns([1, 1, 1.25])
+    with r1[2]:
+        w1, w2, w3 = st.columns([0.8, 5.0, 0.8], vertical_alignment="center")
+        w1.button("‹", key="wk_prev", help="Vorwoche", width="stretch", on_click=_week, args=(-1,),
+                  disabled=st.session_state.week_offset <= WOCHEN_AUSWAHL[0])
+        w2.selectbox("Woche", WOCHEN_AUSWAHL, key="week_offset", format_func=week_label,
+                     label_visibility="collapsed",
+                     help="Woche wählen: die laufende Woche oder bis zu einem Jahr im Voraus. "
+                          "Danach «Plan generieren».")
+        w3.button("›", key="wk_next", help="Nächste Woche", width="stretch", on_click=_week, args=(1,),
+                  disabled=st.session_state.week_offset >= WOCHEN_AUSWAHL[-1])
+    with r1[3]:
+        if st.session_state.step == 2 and ts["result"]:
+            st.download_button("⬇  Excel herunterladen", data=ts["result"]["excel_bytes"],
+                               file_name=ts["result"]["filename"],
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               width="stretch", key="cta_download")
+        elif st.button("→  Plan generieren", key="cta_generate", type="primary", width="stretch",
+                       help=f"Plan für KW {info['kw']} erstellen – Abwesenheiten aus Schritt 1 werden berücksichtigt"):
+            generate_now()
+    # Zeile 2 – die Schritte wie Reiter
+    with st.container(key="stepbar"):
+        s1, s2, s3, _ = st.columns([1.6, 1.6, 2.1, 4.7], vertical_alignment="center")
         step = st.session_state.step
         s1.button("● 1  Planung" if step == 1 else "1  Planung", key="step1", width="stretch",
                   type="primary" if step == 1 else "secondary", on_click=_goto, args=(1,),
@@ -783,26 +818,6 @@ with st.container(key="topbar"):
                   type="primary" if step == 3 else "secondary", on_click=_goto, args=(3,),
                   help="Personen, wer darf was, feste Einsätze und Regeln" +
                        (" – ungespeicherte Änderungen" if cfg_dirty else ""))
-    with hcol[3]:
-        w1, w2, w3 = st.columns([1, 4, 1], vertical_alignment="center")
-        w1.button("‹", key="wk_prev", help="Woche zurück", width="stretch", on_click=_week, args=(-1,),
-                  disabled=st.session_state.week_offset <= -1)
-        w2.markdown(
-            f'<div class="kw-pill" style="justify-content:center;"><div class="kw-center">'
-            f'<span class="kw-big">KW {info["kw"]} · {"gerade" if info["is_even"] else "ungerade"}</span>'
-            f'<span class="kw-range">{info["monday_str"]} – {info["friday_str"]}</span></div></div>',
-            unsafe_allow_html=True,
-        )
-        w3.button("›", key="wk_next", help="Woche vor", width="stretch", on_click=_week, args=(1,))
-    with hcol[4]:
-        if st.session_state.step == 2 and ts["result"]:
-            st.download_button("⬇  Excel herunterladen", data=ts["result"]["excel_bytes"],
-                               file_name=ts["result"]["filename"],
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               width="stretch", key="cta_download")
-        elif st.button("→  Plan generieren", key="cta_generate", type="primary", width="stretch",
-                       help=f"Plan für KW {info['kw']} erstellen – Abwesenheiten aus Schritt 1 werden berücksichtigt"):
-            generate_now()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -826,7 +841,7 @@ st.markdown(
     <div class="stats-strip">
       <div class="stat-item"><div class="lbl">Team</div><div class="val">{TEAM} <small>{n_active} von {n_total} aktiv</small></div></div>
       <div class="stat-divider"></div>
-      <div class="stat-item"><div class="lbl">Woche</div><div class="val">KW {info['kw']} <small>{info['monday_str']} – {info['friday_str']}</small></div></div>
+      <div class="stat-item"><div class="lbl">Woche</div><div class="val">KW {info['kw']} <small>{"gerade" if info["is_even"] else "ungerade"} · {info['monday_str']} – {info['friday_str']}</small></div></div>
       <div class="stat-divider"></div>
       <div class="stat-item"><div class="lbl">Einträge KW {info['kw']}</div><div class="val">{n_week} <small>Abwesenheiten / Wünsche</small></div></div>
       <div class="info-pill" title="2-Wochen-Rhythmus in dieser KW"><span class="ico">i</span><span>{html_escape(notes_str)}</span></div>
@@ -2041,9 +2056,10 @@ def _entry_row(idx: int, e: dict, active: bool) -> None:
 
 def render_planung() -> None:
     st.markdown(
-        f'<div class="howto"><span class="howto-step"><b>1</b>Abwesenheiten &amp; Wünsche für KW {info["kw"]} erfassen</span>'
-        '<span class="howto-arrow">→</span><span class="howto-step"><b>2</b>oben rechts «Plan generieren»</span>'
-        '<span class="howto-arrow">→</span><span class="howto-step"><b>3</b>prüfen, anpassen, Excel herunterladen</span>'
+        f'<div class="howto"><span class="howto-step"><b>1</b>Woche oben wählen – jetzt KW {info["kw"]}</span>'
+        '<span class="howto-arrow">→</span><span class="howto-step"><b>2</b>Abwesenheiten &amp; Wünsche erfassen</span>'
+        '<span class="howto-arrow">→</span><span class="howto-step"><b>3</b>oben rechts «Plan generieren»</span>'
+        '<span class="howto-arrow">→</span><span class="howto-step"><b>4</b>prüfen, anpassen, Excel herunterladen</span>'
         '</div>', unsafe_allow_html=True)
     left, right = st.columns([1.2, 1], gap="medium")
 

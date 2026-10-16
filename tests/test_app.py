@@ -95,6 +95,21 @@ def test_woche_und_team_wechseln_im_ergebnis():
     assert at.button(key="step2").disabled
 
 
+def test_beliebige_woche_waehlen():
+    """Wochenauswahl oben: laufende Woche bis ein Jahr im Voraus, Plan für die gewählte KW."""
+    at = start("KSC")
+    wahl = at.selectbox(key="week_offset")
+    assert wahl.options[0].endswith("diese Woche") and wahl.options[1].endswith("nächste Woche")
+    assert len(wahl.options) == 54
+    wahl.set_value(4).run()
+    at.button(key="cta_generate").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    res = at.session_state["teams"]["KSC"]["result"]
+    assert wahl.options[5].startswith(f"KW {res['kw']} ·")
+    at.button(key="wk_prev").click().run()                 # Pfeile bleiben nutzbar
+    assert at.session_state["week_offset"] == 3 and at.session_state["teams"]["KSC"]["result"]["kw"] != res["kw"]
+
+
 def test_eintrag_erfassen_ksv(daten):
     at = start("KSV")
     at.selectbox(key="KSV·f_employee").set_value("Joy B.")

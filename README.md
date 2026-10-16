@@ -78,7 +78,8 @@ Wortlaut steht als `APP_TITEL` oben in `streamlit_app.py`.
 
 ### Schritt 1 – Planung
 
-1. **Kalenderwoche** wählen (‹ › – Standard ist die nächste Woche).
+1. **Woche** oben wählen: Auswahlliste mit allen Wochen von der laufenden bis ein Jahr im
+   Voraus (oder ‹ › für eine Woche zurück/vor). Standard ist die nächste Woche.
 2. **Abwesenheit oder Sonderwunsch** erfassen: Wer? · Was? (🤒 Krank, 🏖️ Ferien,
    🌙 Frei *(KSV)*, 🕑 Termin, 🏠 Home Office, 📌 Aufgabe setzen) · Tage · Halbtag ·
    wie viele Wochen · Notiz. Die Zeile «→ …» zeigt vor dem Hinzufügen, was
@@ -205,7 +206,9 @@ weil man früher vom Telefon weg muss); manuell gesetzt erscheint ein Hinweis.
   Zusatztexten (Arbeitszeiten) und Excel im Jahresplan-Format.
 - **Titel** «Arbeitsplan KSC» / «Arbeitsplan KSV» (Browser-Tab und Kopfzeile)
   statt «KSC Arbeitsplan».
-- **Oberfläche**: Kopfzeile in Teamfarbe; «So geht's»-Leiste in Schritt 1;
+- **Oberfläche**: Kopfzeile in Teamfarbe und zwei Zeilen (oben Team, Woche, «Plan generieren»;
+  darunter die Schritte) – passt auch auf Laptops; Wochenauswahl als Liste (laufende Woche bis
+  ein Jahr im Voraus); «So geht's»-Leiste in Schritt 1;
   Formular mit sichtbaren Optionen statt Dropdowns und Vorschau «→ wird eingetragen»;
   «📌 Aufgabe setzen» mit Aufgabenliste statt Task-Code in der Notiz; Einträge nach
   «diese Woche» / «andere Wochen» gruppiert; Datum im Plankopf; «Neu generieren»
