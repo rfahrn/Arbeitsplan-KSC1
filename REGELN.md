@@ -1,7 +1,7 @@
 # Regeln Arbeitsplan KSC (Version 7.0, Oktober 2026)
 
 > `arbeitskalender.py` setzt diese Regeln um; wer was darf und alle Fixeinsätze
-> stehen in `team.json` (bearbeitbar in der App unter «Team verwalten»).
+> stehen in `team.json` (bearbeitbar in der App unter «⚙ Team & Regeln»).
 > Rotationen werden aus der Kalenderwoche berechnet – keine Zustandsdatei.
 
 ---

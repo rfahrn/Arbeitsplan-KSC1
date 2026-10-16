@@ -182,6 +182,72 @@ def test_entscheidungen():
     assert not any(s.get_task(n, d, 1) == "TAGES PA/TEL" for n in s.employees for d in range(5))
 
 
+def test_team_bearbeiten():
+    """Helfer der Seite «Team & Regeln»: Kurzname automatisch, TL-Rotation, Entfernen räumt auf."""
+    cfg = ak.load_config()
+    # Kurzname: Vorname, bei Kollision der ganze Name
+    assert ak.new_short("Sandra K.", cfg) == "Sandra"
+    assert ak.new_short("Lara K.", cfg) == "Lara K."
+    # Neue TL kommt ans Ende von TV- und PHC-Montag-Rotation, ehemalige TL fällt heraus
+    ak.set_funktion(cfg, "Amra", "Teamleitung")
+    assert cfg["rotation"]["tv_reihenfolge"][-1] == "Amra" and cfg["rotation"]["phc_montag_tl"][-1] == "Amra"
+    ak.set_funktion(cfg, "Amra", "Team")
+    assert "Amra" not in cfg["rotation"]["tv_reihenfolge"] + cfg["rotation"]["phc_montag_tl"]
+    # Entfernen: keine Verweise mehr, Konfiguration bleibt gültig und planbar
+    assert ak.rotation_refs(cfg, "Dipiga") == ["Labor Mi NM", "18-Uhr-Liste fix Di"]
+    ak.remove_member(cfg, "Dipiga")
+    assert not ak.rotation_refs(cfg, "Dipiga") and "Dipiga" not in cfg["rotation"]["phc_fix"].values()
+    cfg = ak.normalize_config(cfg)
+    assert not ak.validate_config(cfg), ak.validate_config(cfg)
+    assert not pruefe_woche(ak.build_schedule(44, datetime(2026, 10, 26), cfg=cfg))
+
+
+def test_inaktiv_in_rotation_ist_nur_hinweis():
+    cfg = ak.load_config()
+    for m in cfg["mitarbeiter"]:
+        if m["short"] == "Jesika":
+            m["aktiv"] = False
+    assert not ak.config_errors(cfg)
+    assert any("Jesika" in h and "übersprungen" in h for h in ak.config_hints(cfg))
+    sched = ak.build_schedule(44, datetime(2026, 10, 26), cfg=cfg)
+    assert "Jesika" not in sched.employees and not pruefe_woche(sched)
+
+
+def test_name_doppelt_ist_fehler():
+    cfg = ak.load_config()
+    cfg["mitarbeiter"][1]["name"] = cfg["mitarbeiter"][0]["name"]
+    assert any(e.startswith("Name doppelt") for e in ak.config_errors(cfg))
+
+
+def test_feste_einsaetze_als_liste():
+    """Fixeinsätze + «alle 2 Wochen frei» als eine Liste – unverändert zurückschreiben ergibt dasselbe."""
+    base = ak.load_config()
+    cfg = ak.normalize_config(base)
+    rows = ak.recurring_rows(cfg)
+    assert {"short": "Linda", "tag": "Fr", "halbtag": "ganz", "task": "frei", "kw": "gerade"} in rows
+    assert not ak.apply_recurring_rows(cfg, rows)
+    assert ak.config_to_json(cfg) == ak.config_to_json(ak.normalize_config(base))
+    assert not ak.describe_changes(base, cfg)
+    # neue Zeile + Fehlerfälle
+    rows.append({"short": "Amra", "tag": "Mo", "halbtag": "VM", "task": "HO", "kw": None})
+    assert not ak.apply_recurring_rows(cfg, rows)
+    assert {"tag": "Mo", "halbtag": "VM", "task": "HO"} in next(m for m in cfg["mitarbeiter"] if m["short"] == "Amra")["fix"]
+    assert ak.describe_changes(base, cfg) == ["Amra I.: fester Einsatz Mo VM HO"]
+    assert ak.apply_recurring_rows(cfg, rows + [{"short": "Amra", "tag": "Fr", "halbtag": "ganz", "task": "frei", "kw": None}])
+    assert ak.apply_recurring_rows(cfg, rows + [{"short": "Linda", "tag": "Mo", "halbtag": "ganz", "task": "frei", "kw": "ungerade"}])
+
+
+def test_aenderungen_lesbar():
+    base = ak.load_config()
+    cfg = ak.normalize_config(base)
+    lara = next(m for m in cfg["mitarbeiter"] if m["short"] == "Lara")
+    lara["pct"] = 80
+    lara["kann"] = [r for r in lara["kann"] if r != "HUB"]
+    cfg["regeln"]["abkl_pro_halbtag"] = 3
+    assert ak.describe_changes(base, cfg) == [
+        "Lara I.: Pensum 100 → 80 %", "Lara I.: darf nicht mehr HUB", "Regel «ABKL pro Halbtag»: 2 → 3"]
+
+
 if __name__ == "__main__":
     start = datetime.strptime(sys.argv[1], "%Y-%m-%d") if len(sys.argv) > 1 else ak.get_next_monday()
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 8

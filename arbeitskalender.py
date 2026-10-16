@@ -248,6 +248,11 @@ def normalize_config(cfg: dict) -> dict:
 
 def validate_config(cfg: dict) -> List[str]:
     """Plausibilitätsprüfung der Konfiguration (für die UI). Leere Liste = ok."""
+    return config_errors(cfg) + config_hints(cfg)
+
+
+def config_errors(cfg: dict) -> List[str]:
+    """Fehler, mit denen die Konfiguration nicht übernommen werden darf."""
     probs: List[str] = []
     shorts = [m.get("short", "") for m in cfg.get("mitarbeiter", [])]
     for s in shorts:
@@ -260,50 +265,270 @@ def validate_config(cfg: dict) -> List[str]:
     overlap = set(shorts) & set(backup_shorts)
     if overlap:
         probs.append(f"Kurzname im Team UND im BackUp-Team: {', '.join(sorted(overlap))}")
-    active = {m["short"] for m in cfg.get("mitarbeiter", []) if m.get("aktiv", True)}
+    names = [(m.get("name") or m.get("short", "")).strip() for m in cfg.get("mitarbeiter", [])] + \
+            [(b.get("name") or b.get("short", "")).strip() for b in cfg.get("backup_team", [])]
+    dup_names = {n for n in names if n and names.count(n) > 1}
+    if dup_names:
+        probs.append(f"Name doppelt: {', '.join(sorted(dup_names))}")
     for m in cfg.get("mitarbeiter", []):
+        who = m.get("name") or m.get("short")
         for r in m.get("kann", []):
             if r not in ROLLEN:
-                probs.append(f"{m.get('short')}: unbekannte Rolle '{r}'")
+                probs.append(f"{who}: unbekannte Rolle '{r}'")
         for dk, val in m.get("anwesend", {}).items():
             if dk not in DAY_KEYS or val not in HALBTAG_WERTE:
-                probs.append(f"{m.get('short')}: Anwesenheit {dk}={val} ungültig")
+                probs.append(f"{who}: Anwesenheit {dk}={val} ungültig")
         f2 = m.get("frei_alle_2_wochen")
         if f2:
             if f2.get("kw") not in PARITAET:
-                probs.append(f"{m.get('short')}: frei_alle_2_wochen.kw muss gerade/ungerade sein")
+                probs.append(f"{who}: frei_alle_2_wochen.kw muss gerade/ungerade sein")
             for dk, val in f2.get("tage", {}).items():
                 if dk not in DAY_KEYS or val not in HALBTAG_WERTE:
-                    probs.append(f"{m.get('short')}: frei_alle_2_wochen {dk}={val} ungültig")
+                    probs.append(f"{who}: frei_alle_2_wochen {dk}={val} ungültig")
         for fx in m.get("fix", []):
             if fx.get("tag") not in DAY_KEYS or fx.get("halbtag") not in HALBTAG_WERTE:
-                probs.append(f"{m.get('short')}: Fixeinsatz {fx} ungültig")
+                probs.append(f"{who}: Fixeinsatz {fx} ungültig")
             if not fx.get("task"):
-                probs.append(f"{m.get('short')}: Fixeinsatz ohne Task")
+                probs.append(f"{who}: Fixeinsatz ohne Task")
             if fx.get("kw") not in (None, "", "gerade", "ungerade"):
-                probs.append(f"{m.get('short')}: Fixeinsatz kw muss leer/gerade/ungerade sein")
-    rot = cfg.get("rotation", {})
-    tls = [m["short"] for m in cfg.get("mitarbeiter", []) if m.get("tl") and m.get("aktiv", True)]
-    if not tls:
-        probs.append("Keine aktive Teamleitung (tl=true) – Tagesverantwortung/Queue bleiben offen")
-    for n in rot.get("tv_reihenfolge", []):
-        if n not in active:
-            probs.append(f"Tagesverantwortung: '{n}' ist nicht aktiv / unbekannt")
-    for n in rot.get("phc_montag_tl", []):
-        if n not in active:
-            probs.append(f"PHC Montag: '{n}' ist nicht aktiv / unbekannt")
-    for n in rot.get("phc_freitag_wechsel", []):
-        if n not in active:
-            probs.append(f"PHC Freitag: '{n}' ist nicht aktiv / unbekannt")
-    for n in rot.get("labor_mi_nm", []):
-        if n not in active:
-            probs.append(f"Labor Mi NM: '{n}' ist nicht aktiv / unbekannt")
-    for dk, n in rot.get("phc_fix", {}).items():
+                probs.append(f"{who}: Fixeinsatz kw muss leer/gerade/ungerade sein")
+    for dk in cfg.get("rotation", {}).get("phc_fix", {}):
         if dk not in DAY_KEYS:
             probs.append(f"phc_fix: Tag '{dk}' ungültig")
-        if n not in active:
-            probs.append(f"PHC {dk} fix: '{n}' ist nicht aktiv / unbekannt")
     return probs
+
+
+def config_hints(cfg: dict) -> List[str]:
+    """Hinweise: der Generator läuft, überspringt aber z.B. inaktive Personen in Rotationen."""
+    probs: List[str] = []
+    members = {m["short"]: m for m in cfg.get("mitarbeiter", []) if m.get("short")}
+    active = {s for s, m in members.items() if m.get("aktiv", True)}
+
+    def why(n):
+        return "ist inaktiv und wird übersprungen" if n in members else "ist unbekannt"
+
+    rot = cfg.get("rotation", {})
+    if not any(m.get("tl") for s, m in members.items() if s in active):
+        probs.append("Keine aktive Teamleitung (tl=true) – Tagesverantwortung/Queue bleiben offen")
+    for key, label in (("tv_reihenfolge", "Tagesverantwortung"), ("phc_montag_tl", "PHC Montag"),
+                       ("phc_freitag_wechsel", "PHC Freitag"), ("labor_mi_nm", "Labor Mi NM")):
+        for n in rot.get(key, []):
+            if n not in active:
+                probs.append(f"{label}: '{n}' {why(n)}")
+    for dk, n in rot.get("phc_fix", {}).items():
+        if n not in active:
+            probs.append(f"PHC {dk} fix: '{n}' {why(n)}")
+    return probs
+
+
+# ── Team bearbeiten (für die App; ohne Streamlit testbar) ─────────────
+
+FUNKTIONEN = ["Team", "Teamleitung", "nur Telefon", "Aushilfe"]
+ROTATION_LISTEN = ["tv_reihenfolge", "phc_montag_tl", "phc_freitag_wechsel", "labor_mi_nm"]
+
+
+def funktion(m: dict) -> str:
+    if m.get("tl"):
+        return "Teamleitung"
+    if m.get("nur_tel"):
+        return "nur Telefon"
+    if m.get("aushilfe"):
+        return "Aushilfe"
+    return "Team"
+
+
+def set_funktion(cfg: dict, short: str, value: str) -> None:
+    """Setzt TL / nur TEL / Aushilfe. Neue TL kommen ans Ende der TV- und
+    PHC-Montag-Rotation, ehemalige TL werden dort entfernt."""
+    m = next(x for x in cfg["mitarbeiter"] if x["short"] == short)
+    was_tl = bool(m.get("tl"))
+    m["tl"], m["nur_tel"], m["aushilfe"] = value == "Teamleitung", value == "nur Telefon", value == "Aushilfe"
+    rot = cfg["rotation"]
+    for key in ("tv_reihenfolge", "phc_montag_tl"):
+        lst = rot.get(key) or []
+        if m["tl"] and not was_tl and lst and short not in lst:
+            rot[key] = lst + [short]
+        elif was_tl and not m["tl"]:
+            rot[key] = [n for n in lst if n != short]
+
+
+def new_short(name: str, cfg: dict) -> str:
+    """Interner Schlüssel für eine neue Person: Vorname, bei Kollision der ganze Name."""
+    name = name.strip()
+    taken = {m["short"] for m in cfg.get("mitarbeiter", [])} | {b["short"] for b in cfg.get("backup_team", [])}
+    first = name.split()[0] if name.split() else name
+    for cand in (first, name):
+        if cand and cand not in taken:
+            return cand
+    i = 2
+    while f"{name} {i}" in taken:
+        i += 1
+    return f"{name} {i}"
+
+
+def rotation_refs(cfg: dict, short: str) -> List[str]:
+    """Wo steht die Person in Rotationen / Tagesregeln? (für Hinweise beim Entfernen)"""
+    rot = cfg["rotation"]
+    labels = {"tv_reihenfolge": "Tagesverantwortung", "phc_montag_tl": "18-Uhr-Liste Montag",
+              "phc_freitag_wechsel": "18-Uhr-Liste Freitag", "labor_mi_nm": "Labor Mi NM"}
+    refs = [lbl for key, lbl in labels.items() if short in rot.get(key, [])]
+    refs += [f"18-Uhr-Liste fix {dk}" for dk, n in rot.get("phc_fix", {}).items() if n == short]
+    if any(short in v for v in rot.get("phc_tag_ausschluss", {}).values()):
+        refs.append("18-Uhr-Liste Ausschlüsse")
+    if rot.get("po_dienstag_bevorzugt") == short:
+        refs.append("Postöffnung Dienstag")
+    return refs
+
+
+def remove_member(cfg: dict, short: str) -> None:
+    """Entfernt eine Person samt allen Verweisen in Rotationen."""
+    cfg["mitarbeiter"] = [m for m in cfg["mitarbeiter"] if m["short"] != short]
+    rot = cfg["rotation"]
+    for key in ROTATION_LISTEN:
+        rot[key] = [n for n in rot.get(key, []) if n != short]
+    rot.get("tv_farben", {}).pop(short, None)
+    rot["phc_fix"] = {dk: n for dk, n in rot.get("phc_fix", {}).items() if n != short}
+    rot["phc_tag_ausschluss"] = {dk: [n for n in v if n != short]
+                                 for dk, v in rot.get("phc_tag_ausschluss", {}).items()
+                                 if [n for n in v if n != short]}
+    if rot.get("po_dienstag_bevorzugt") == short:
+        rot["po_dienstag_bevorzugt"] = ""
+
+
+def recurring_rows(cfg: dict) -> List[dict]:
+    """Fixeinsätze und «alle 2 Wochen frei» aller Personen als eine Liste:
+    {short, tag, halbtag, task, kw}  (task "frei" = alle 2 Wochen frei)."""
+    rows = []
+    for m in cfg["mitarbeiter"]:
+        for fx in m.get("fix", []):
+            rows.append({"short": m["short"], "tag": fx.get("tag", "Mo"), "halbtag": fx.get("halbtag", "ganz"),
+                         "task": fx.get("task", ""), "kw": fx.get("kw") or None})
+        f2 = m.get("frei_alle_2_wochen") or {}
+        for dk, val in f2.get("tage", {}).items():
+            rows.append({"short": m["short"], "tag": dk, "halbtag": val, "task": "frei", "kw": f2.get("kw")})
+    return rows
+
+
+def apply_recurring_rows(cfg: dict, rows: List[dict]) -> List[str]:
+    """Schreibt die Liste aus recurring_rows() zurück. Liefert Fehler (dann bleibt cfg unverändert)."""
+    names = {m["short"]: m.get("name") or m["short"] for m in cfg["mitarbeiter"]}
+    per = {s: {"fix": [], "frei": {}, "kw": None} for s in names}
+    errors = []
+    for r in rows:
+        p = per.get(r["short"])
+        if p is None or not r.get("task"):
+            continue
+        if r["task"] == "frei":
+            if r.get("kw") not in PARITAET:
+                errors.append(f"{names[r['short']]}: «frei» jede Woche bitte unter Personen → Anwesenheit "
+                              f"({r['tag']}) eintragen; hier nur «gerade KW» oder «ungerade KW»")
+            elif p["kw"] and p["kw"] != r["kw"]:
+                errors.append(f"{names[r['short']]}: «frei» geht nur in geraden ODER in ungeraden KW, nicht gemischt")
+            else:
+                p["kw"] = r["kw"]
+                p["frei"][r["tag"]] = r["halbtag"]
+        else:
+            fx = {"tag": r["tag"], "halbtag": r["halbtag"], "task": r["task"]}
+            if r.get("kw") in PARITAET:
+                fx["kw"] = r["kw"]
+            p["fix"].append(fx)
+    if errors:
+        return errors
+    for m in cfg["mitarbeiter"]:
+        p = per[m["short"]]
+        m["fix"] = p["fix"]
+        m["frei_alle_2_wochen"] = {"kw": p["kw"], "tage": p["frei"]} if p["frei"] else None
+    return []
+
+
+REGEL_LABELS = {
+    "tel_montag_vm": "TEL Montag Vormittag", "tel_sonst": "TEL übrige Halbtage",
+    "abkl_pro_halbtag": "ABKL pro Halbtag", "po_zusatz_vm": "Zusatz-PO am Vormittag",
+    "hub_pro_tag": "HUB-Halbtage pro Tag", "rx_abo_pro_woche": "RX Abo pro Woche",
+    "scan_max_halbtage_pro_woche": "Scanning max. pro Person/Woche", "scan_anteil": "Scanning-Anteil",
+    "tl_tel_min_pro_woche": "TL am Telefon mind.", "tl_tel_max_pro_woche": "TL am Telefon max.",
+    "scan_nm_ersatz_wenn_aushilfe_fehlt": "NM-Scan-Ersatz ohne Aushilfe",
+    "schalter_code": "Schalter-Code", "schalter_reserve_modus": "Schalter-Reserve",
+    "tpa_tel_nm": "TAGES PA/TEL am Nachmittag",
+}
+ROTATION_LABELS = {
+    "tv_reihenfolge": "Tagesverantwortung", "phc_montag_tl": "18-Uhr-Liste Montag",
+    "phc_freitag_wechsel": "18-Uhr-Liste Freitag", "labor_mi_nm": "Labor Mi NM",
+    "phc_fix": "18-Uhr-Liste fix pro Tag", "phc_tag_ausschluss": "18-Uhr-Liste Ausschlüsse",
+    "po_dienstag_bevorzugt": "Postöffnung Dienstag", "tv_farben": "TV-Farben",
+}
+OFFSET_LABELS = {
+    "tv": "Tagesverantwortung", "phc_montag": "18-Uhr-Liste Montag", "phc_freitag": "18-Uhr-Liste Freitag",
+    "schalter": "Schalter-Gruppe", "labor": "Labor", "Direkt": "Direkt", "ONB": "ONB", "BTM": "BTM",
+}
+
+
+def describe_changes(old: dict, new: dict) -> List[str]:
+    """Lesbare Liste der Unterschiede zwischen zwei Konfigurationen (für «ungespeichert»)."""
+    old, new = normalize_config(old), normalize_config(new)
+    out: List[str] = []
+    om = {m["short"]: m for m in old["mitarbeiter"]}
+    nm = {m["short"]: m for m in new["mitarbeiter"]}
+
+    def name(s):
+        return (nm.get(s) or om.get(s) or {}).get("name") or s
+
+    def fx_str(fx):
+        kw = f" ({fx['kw']} KW)" if fx.get("kw") else ""
+        return f"{fx.get('tag')} {fx.get('halbtag', 'ganz')} {fx.get('task')}{kw}"
+
+    out += [f"Neue Person: {name(s)}" for s in nm if s not in om]
+    out += [f"Entfernt: {name(s)}" for s in om if s not in nm]
+    for s, m in nm.items():
+        o = om.get(s)
+        if o is None:
+            continue
+        n = m.get("name") or s
+        if o.get("name") != m.get("name"):
+            out.append(f"{o.get('name')} heisst neu {m.get('name')}")
+        if o.get("pct") != m.get("pct"):
+            out.append(f"{n}: Pensum {o.get('pct')} → {m.get('pct')} %")
+        if bool(o.get("aktiv", True)) != bool(m.get("aktiv", True)):
+            out.append(f"{n}: {'wieder aktiv' if m.get('aktiv', True) else 'inaktiv (wird nicht eingeplant)'}")
+        if funktion(o) != funktion(m):
+            out.append(f"{n}: Funktion {funktion(o)} → {funktion(m)}")
+        for dk in DAY_KEYS:
+            a, b = o["anwesend"].get(dk, "ganz"), m["anwesend"].get(dk, "ganz")
+            if a != b:
+                out.append(f"{n}: Anwesenheit {dk} {a} → {b}")
+        plus = [r for r in m["kann"] if r not in o["kann"]]
+        minus = [r for r in o["kann"] if r not in m["kann"]]
+        if plus:
+            out.append(f"{n}: darf neu {', '.join(plus)}")
+        if minus:
+            out.append(f"{n}: darf nicht mehr {', '.join(minus)}")
+        ofx, nfx = sorted(map(fx_str, o["fix"])), sorted(map(fx_str, m["fix"]))
+        out += [f"{n}: fester Einsatz {x}" for x in nfx if x not in ofx]
+        out += [f"{n}: fester Einsatz entfernt: {x}" for x in ofx if x not in nfx]
+        if (o.get("frei_alle_2_wochen") or None) != (m.get("frei_alle_2_wochen") or None):
+            f2 = m.get("frei_alle_2_wochen")
+            out.append(f"{n}: alle 2 Wochen frei → " +
+                       (f"{', '.join(f'{d} {v}' for d, v in f2['tage'].items())} ({f2['kw']} KW)" if f2 else "keine"))
+        if (o.get("bemerkung") or "") != (m.get("bemerkung") or ""):
+            out.append(f"{n}: Bemerkung geändert")
+    common_old = [s for s in om if s in nm]
+    common_new = [s for s in nm if s in om]
+    if common_old != common_new:
+        out.append("Reihenfolge im Plan geändert")
+    for k, lbl in REGEL_LABELS.items():
+        if old["regeln"].get(k) != new["regeln"].get(k):
+            out.append(f"Regel «{lbl}»: {old['regeln'].get(k)} → {new['regeln'].get(k)}")
+    for k, lbl in ROTATION_LABELS.items():
+        if old["rotation"].get(k) != new["rotation"].get(k):
+            out.append(f"{lbl} geändert")
+    for k, lbl in OFFSET_LABELS.items():
+        if old["rotation"]["offset"].get(k) != new["rotation"]["offset"].get(k):
+            out.append(f"Rotation «{lbl}»: wer diese Woche dran ist, neu eingestellt")
+    if old["backup_team"] != new["backup_team"]:
+        out.append("BackUp-Team geändert")
+    if not out and config_to_json(old) != config_to_json(new):
+        out.append("Weitere Einstellungen geändert")
+    return out
 
 
 # ============================================================

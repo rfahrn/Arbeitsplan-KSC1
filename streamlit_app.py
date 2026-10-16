@@ -5,7 +5,8 @@ KSC Arbeitsplan – Streamlit-App (Version 7.0, Oktober 2026)
 Oberfläche für https://arbeitsplan-ksc.streamlit.app
 
 - Schritt 1 «Planung»: Abwesenheiten/Sonderwünsche erfassen (auch über
-  mehrere Wochen) und das Team verwalten – Personen, Pensen, Anwesenheit,
+  mehrere Wochen).
+- Seite «Team & Regeln»: Personen, Pensen, Anwesenheit,
   Rollen, Fixeinsätze, Rotationen, Besetzungsregeln, BackUp-Team.
   Alles ohne Code-Änderung, gespeichert in team.json.
 - Schritt 2 «Ergebnis»: Wochenplan mit Tagesrollen, Konflikten,
@@ -39,7 +40,7 @@ if str(BASE_DIR) not in sys.path:
 
 import arbeitskalender as ak  # noqa: E402
 from arbeitskalender import (  # noqa: E402
-    DAYS, DAY_KEYS, HALBTAG_WERTE, NUR_MANUELL, PARITAET, ROLLEN, SCHALTER_CODES,
+    DAYS, DAY_KEYS, HALBTAG_WERTE, NUR_MANUELL, ROLLEN, SCHALTER_CODES,
     SCHALTER_RESERVE_MODI, SLOTS, SLOT_KEYS, TASK_COLORS, TPA_TEL_MODI,
 )
 
@@ -108,13 +109,14 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg); color: v
 .badge-kw { background: #f1f5f9; color: var(--text-dim); border: 1px solid var(--border);
   padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
 
-div.stButton > button[kind="primary"] { background: var(--primary) !important; border: 1px solid var(--primary) !important;
+div.stButton button[kind="primary"], div.stFormSubmitButton button[kind="primaryFormSubmit"] { background: var(--primary) !important; border: 1px solid var(--primary) !important;
   color: white !important; font-weight: 600 !important; border-radius: 9px !important; }
-div.stButton > button[kind="primary"]:hover { background: var(--primary-2) !important; border-color: var(--primary-2) !important; }
-div.stButton > button[kind="secondary"] { background: var(--surface) !important; border: 1px solid var(--border) !important;
+div.stButton button[kind="primary"]:hover, div.stFormSubmitButton button[kind="primaryFormSubmit"]:hover { background: var(--primary-2) !important; border-color: var(--primary-2) !important; }
+div.stButton button[kind="secondary"] { background: var(--surface) !important; border: 1px solid var(--border) !important;
   color: var(--text) !important; border-radius: 8px !important; font-weight: 500 !important; }
-div.stButton > button[kind="secondary"]:hover { background: var(--surface-2) !important; border-color: var(--border-2) !important; }
+div.stButton button[kind="secondary"]:hover { background: var(--surface-2) !important; border-color: var(--border-2) !important; }
 div.stButton > button, div.stButton > button > div, div.stButton > button p { white-space: nowrap !important; }
+div.stButton button:disabled { opacity: .45; cursor: not-allowed; }
 div.stButton > button { padding-left: 6px !important; padding-right: 6px !important; }
 div.stDownloadButton > button { background: var(--ok) !important; border: 1px solid var(--ok) !important;
   color: white !important; border-radius: 9px !important; font-weight: 600 !important; }
@@ -199,6 +201,14 @@ table.roles td.open { color: var(--warn); font-weight: 700; }
 .legend-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
 .element-container { margin-bottom: 0.4rem; }
+
+.page-head h2 { font-size: 18px; font-weight: 700; color: var(--heading); margin: 0 0 2px; padding: 0; }
+.page-head .sub { font-size: 12.5px; color: var(--text-mute); margin-bottom: 10px; }
+.st-key-savebar_ok { background: var(--ok-soft); border-color: rgba(22,163,74,.3) !important; color: #14532d; }
+.st-key-savebar_dirty { background: var(--warn-soft); border-color: rgba(217,119,6,.35) !important; color: #78350f; }
+.st-key-savebar_ok p, .st-key-savebar_dirty p { margin-bottom: 0; font-size: 13.5px; }
+.team-hint { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 14px;
+  font-size: 13px; color: var(--text-dim); }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -240,10 +250,10 @@ def person_label(short: str) -> str:
     cfg = st.session_state.cfg
     for m in cfg["mitarbeiter"]:
         if m["short"] == short:
-            return short if m.get("name") in (short, "", None) else f"{short} · {m['name']}"
+            return m.get("name") or short
     for b in cfg["backup_team"]:
         if b["short"] == short:
-            return f"{short} (BackUp)"
+            return f"{b.get('name') or short} (BackUp)"
     return short
 
 
@@ -262,10 +272,6 @@ def backup_shorts() -> list[str]:
 def employee_options() -> dict[str, str]:
     """Anzeige-Label → Kurzname (aktives Team + BackUp-Team)."""
     return {person_label(s): s for s in active_shorts() + backup_shorts()}
-
-
-def role_options() -> dict[str, str]:
-    return {f"{r} – {ROLLEN[r]}": r for r in ROLLEN}
 
 
 def get_week_info(offset: int = 0) -> dict:
@@ -538,7 +544,7 @@ def run_generation() -> None:
 info = get_week_info(st.session_state.week_offset)
 
 st.markdown('<div class="topbar">', unsafe_allow_html=True)
-hcol = st.columns([2.6, 2.4, 2.6, 1.0, 1.6])
+hcol = st.columns([2.0, 3.6, 2.4, 1.0, 1.6])
 
 with hcol[0]:
     st.markdown(
@@ -549,7 +555,7 @@ with hcol[0]:
     )
 
 with hcol[1]:
-    s1, s2 = st.columns(2)
+    s1, s2, s3 = st.columns([1, 1, 1.25])
     with s1:
         if st.button("● 1   Planung" if st.session_state.step == 1 else "1   Planung", key="step1",
                      width="stretch", type="primary" if st.session_state.step == 1 else "secondary"):
@@ -560,6 +566,13 @@ with hcol[1]:
                      width="stretch", type="primary" if st.session_state.step == 2 else "secondary",
                      disabled=st.session_state.result is None):
             st.session_state.step = 2
+            st.rerun()
+    with s3:
+        if st.button("⚙  Team & Regeln" + ("  •" if cfg_dirty else ""), key="step3", width="stretch",
+                     type="primary" if st.session_state.step == 3 else "secondary",
+                     help="Personen, Rollen, feste Einsätze, Rotationen und Regeln" +
+                          (" – ungespeicherte Änderungen" if cfg_dirty else "")):
+            st.session_state.step = 3
             st.rerun()
 
 with hcol[2]:
@@ -644,8 +657,56 @@ st.markdown(
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  Team verwalten
+#  Team & Regeln (eigene Seite)
 # ══════════════════════════════════════════════════════════════════════
+#  Jede Änderung wird sofort in die Sitzung übernommen (Callback → commit)
+#  und gilt für den nächsten Plan; «Speichern» in der Leiste oben macht sie
+#  dauerhaft. Intern bleibt der Kurzname ("short") der Schlüssel jeder
+#  Person – angezeigt wird überall nur der Name.
+
+TEAM_SECTIONS = ["👤 Personen", "🎯 Wer darf was", "📌 Feste Einsätze", "🔄 Rotationen",
+                 "⚖️ Regeln", "🗂️ BackUp-Team", "💾 Sichern & Laden"]
+WOCHEN = {"jede Woche": None, "gerade KW": "gerade", "ungerade KW": "ungerade"}
+WOCHEN_LABEL = {v: k for k, v in WOCHEN.items()}
+FREI = "frei (nicht da)"
+# Rollen-Matrix: Rolle in team.json → Spaltentitel (Schalter hat eine eigene Auswahl-Spalte)
+ROLLEN_SPALTEN = {
+    "HUB": "HUB", "ERF8": "ERF8", "ERF9": "ERF9 Mi–Fr", "TPA": "TAGES PA", "PHC": "18-Uhr-Liste",
+    "PO": "Postöffnung", "Scanning": "Scanning", "RX Abo": "RX Abo",
+    "Direkt": "Direkt", "ONB": "ONB", "BTM": "BTM", "VBZ": "VBZ",
+}
+SCHALTER_WAHL = ["–", "ja", "Reserve"]
+HALBTAG_HILFE = "ganz = ganzer Tag · VM = nur Vormittag · NM = nur Nachmittag · frei = nicht da"
+
+HILFE = [
+    ("eine neue Person aufnehmen",
+     "👤 Personen → «➕ Neue Person». Rollen lassen sich von einer ähnlichen Person übernehmen – danach in 🎯 Wer darf was prüfen."),
+    ("jemanden vorübergehend nicht einplanen (krank, Mutterschutz)",
+     "👤 Personen → Häkchen «Aktiv» entfernen. Rollen und feste Einsätze bleiben erhalten."),
+    ("Pensum, Arbeitstage oder Funktion ändern", "👤 Personen → direkt in der Tabelle."),
+    ("jemandem eine Aufgabe erlauben oder wegnehmen", "🎯 Wer darf was → Häkchen setzen oder entfernen."),
+    ("einen festen Einsatz ändern (z. B. Mo ERF9 an eine andere Person)",
+     "📌 Feste Einsätze → bei der alten Zeile «entfernen» anhaken, oben die neue Zeile hinzufügen."),
+    ("«jede 2. Woche frei» eintragen", "📌 Feste Einsätze → Einsatz «frei», Wochen «gerade KW» oder «ungerade KW»."),
+    ("korrigieren, wer diese Woche TV, 18-Uhr-Liste, Labor oder eine Wochenaufgabe hat",
+     "🔄 Rotationen → bei «diese Woche» die richtige Person wählen; die Folgewochen ergeben sich daraus."),
+    ("die Anzahl Personen für TEL, ABKL, PO, HUB, RX Abo … ändern", "⚖️ Regeln"),
+    ("eine einmalige Abwesenheit oder einen Sonderwunsch erfassen", "Nicht hier – in Schritt 1 «Planung»."),
+]
+
+# Regeln, die im Programm fest eingebaut sind (Änderung = Code-Anpassung)
+FESTE_REGELN = [
+    "TEL und ABKL: pro Person höchstens ein Halbtag pro Tag (nur-Telefon-Personen ausgenommen).",
+    "Tagesverantwortung: dieselbe Teamleitung ganztags, an dem Tag ohne andere Aufgaben (TL/Q).",
+    "TAGES PA, Schalter und ERF9 immer ganztags; ERF9 Mi–Fr wechselnd (Mo/Di über feste Einsätze).",
+    "ERF8: eine Person pro Nachmittag.",
+    "Teamleitungen bekommen nie TAGES PA oder Postöffnung; freie Halbtage werden ERF7/Q.",
+    "18-Uhr-Liste: die Person scannt an diesem Tag nicht; nie nur-Telefon- oder Aushilfe-Personen.",
+    "Aushilfe: täglich PO/SCAN am Vormittag und scanning am Nachmittag.",
+    "Wochenaufgaben Direkt / ONB / BTM: drei verschiedene Personen; wer die ganze Woche fehlt, wird übersprungen.",
+    "PO/TEL am Nachmittag wird nie automatisch vergeben (nur Notfall, manuell im Plan).",
+]
+
 
 def _b(v) -> bool:
     return bool(v) and not (isinstance(v, float) and pd.isna(v))
@@ -657,486 +718,813 @@ def _s(v) -> str:
     return str(v).strip()
 
 
-def _apply_people_table(edited: pd.DataFrame) -> list[str]:
-    """Übernimmt die Personen-Tabelle in die Konfiguration. Liefert Probleme."""
-    cfg = copy.deepcopy(st.session_state.cfg)
-    by_short = {m["short"]: m for m in cfg["mitarbeiter"]}
-    new_list, seen = [], set()
-    for _, r in edited.iterrows():
-        short = _s(r.get("Kurzname"))
-        if not short:
-            continue
-        if short in seen:
-            return [f"Kurzname doppelt: {short}"]
-        seen.add(short)
-        m = by_short.get(short) or {"short": short, "kann": [], "fix": [], "frei_alle_2_wochen": None}
-        m["name"] = _s(r.get("Name")) or short
-        try:
-            m["pct"] = int(r.get("%") if not pd.isna(r.get("%")) else 100)
-        except (TypeError, ValueError):
-            m["pct"] = 100
-        m["aktiv"] = _b(r.get("Aktiv"))
-        m["tl"] = _b(r.get("TL"))
-        m["nur_tel"] = _b(r.get("nur TEL"))
-        m["aushilfe"] = _b(r.get("Aushilfe"))
-        anw = {}
-        for dk in DAY_KEYS:
-            val = _s(r.get(dk)) or "ganz"
-            if val != "ganz":
-                anw[dk] = val
-        m["anwesend"] = anw
-        m["bemerkung"] = _s(r.get("Bemerkung"))
-        new_list.append(m)
-    cfg["mitarbeiter"] = new_list
-    cfg = ak.normalize_config(cfg)
-    probs = ak.validate_config(cfg)
-    if not probs:
-        replace_cfg(cfg)
-    return probs
-
-
-def render_team_people(ver: int) -> None:
+def disp(short: str) -> str:
+    """Anzeigename zum internen Kurznamen."""
     cfg = st.session_state.cfg
-    st.caption("Zeile hinzufügen = neue Person (unten «+»). Zeile löschen = Person entfernen "
-               "(Zeile markieren, Entf). Deaktivieren statt löschen, wenn jemand nur vorübergehend fehlt. "
-               "Anwesenheit pro Tag: ganz · VM · NM · frei. Danach «Übernehmen» klicken.")
-    rows = []
-    for m in cfg["mitarbeiter"]:
-        row = {"Kurzname": m["short"], "Name": m.get("name", ""), "%": int(m.get("pct", 100)),
-               "Aktiv": bool(m.get("aktiv", True)), "TL": bool(m.get("tl")),
-               "nur TEL": bool(m.get("nur_tel")), "Aushilfe": bool(m.get("aushilfe"))}
-        for dk in DAY_KEYS:
-            row[dk] = m.get("anwesend", {}).get(dk, "ganz")
-        row["Bemerkung"] = m.get("bemerkung", "")
-        rows.append(row)
-    cols = ["Kurzname", "Name", "%", "Aktiv", "TL", "nur TEL", "Aushilfe"] + DAY_KEYS + ["Bemerkung"]
-    df = pd.DataFrame(rows, columns=cols)
+    for p in cfg["mitarbeiter"] + cfg["backup_team"]:
+        if p["short"] == short:
+            return p.get("name") or short
+    return short
+
+
+def _member(cfg: dict, short: str) -> dict:
+    return next(m for m in cfg["mitarbeiter"] if m["short"] == short)
+
+
+def _cfg_copy() -> dict:
+    return copy.deepcopy(st.session_state.cfg)
+
+
+def _editor_height(n_rows: int) -> int:
+    """Höhe, bei der eine Tabelle ganz ohne eigene Scrollleiste sichtbar ist."""
+    return 35 * (n_rows + 1) + 3
+
+
+def try_commit(new_cfg: dict, msg: str = "", remount: bool = False) -> list[str]:
+    """Übernimmt eine geänderte Konfiguration sofort in die Sitzung.
+    Liefert Fehler – dann bleibt alles beim Alten."""
+    new_cfg = ak.normalize_config(new_cfg)
+    errors = ak.config_errors(new_cfg)
+    if errors:
+        return errors
+    st.session_state.cfg = new_cfg
+    st.session_state.result = None
+    if remount:  # Tabellen frisch aufbauen: st.data_editor verwirft seinen Bearbeitungsstand,
+        st.session_state.cfg_version += 1  # sobald sich die Daten ändern – sonst gehen Folge-Edits verloren
+    if msg:
+        st.toast(msg, icon="✅")
+    return []
+
+
+def commit_cb(new_cfg: dict, msg: str = "", remount: bool = False) -> None:
+    """Für Widget-Callbacks: Fehler oben anzeigen und Widgets auf den gültigen Stand zurücksetzen."""
+    errors = try_commit(new_cfg, msg, remount)
+    if errors:
+        _fail(errors)
+
+
+def _fail(errors: list[str]) -> None:
+    st.session_state.team_error = errors
+    st.session_state.cfg_version += 1
+
+
+# ── Speicherleiste ────────────────────────────────────────────────────
+
+def _save_cb() -> None:
+    st.session_state.save_msgs = save_everything(push_github=bool(github_conf()))
+
+
+def _discard_cb() -> None:
+    replace_cfg(json.loads(st.session_state.cfg_saved_json))
+    st.toast("Änderungen verworfen – wieder der zuletzt gespeicherte Stand.", icon="↩️")
+
+
+def render_save_bar() -> None:
+    changes = ak.describe_changes(json.loads(st.session_state.cfg_saved_json), st.session_state.cfg)
+    if entries_dirty:
+        changes.append("Abwesenheiten / Sonderwünsche aus Schritt 1")
+    # Gleiche Höhe in beiden Zuständen, damit die Seite beim ersten Ändern nicht springt
+    with st.container(border=True, key="savebar_dirty" if changes else "savebar_ok"):
+        c1, c2, c3, c4 = st.columns([5.2, 1.6, 1.2, 1.2], vertical_alignment="center")
+        n = len(changes)
+        c1.markdown(f"**{n} ungespeicherte Änderung{'en' if n != 1 else ''}** – gilt schon für den nächsten Plan, "
+                    "geht aber verloren, wenn die App neu startet." if changes else
+                    "✓ **Alles gespeichert** – der Generator arbeitet mit diesem Stand.")
+        with c2.popover("Was wurde geändert?", width="stretch", disabled=not changes):
+            st.markdown("\n".join(f"- {c}" for c in changes))
+        c3.button("💾  Speichern", key="savebar_save", type="primary", width="stretch", on_click=_save_cb,
+                  disabled=not changes)
+        c4.button("↶  Verwerfen", key="savebar_discard", width="stretch", on_click=_discard_cb,
+                  disabled=not cfg_dirty, help="Team & Regeln auf den zuletzt gespeicherten Stand zurücksetzen")
+    for ok, msg in st.session_state.pop("save_msgs", []):
+        (st.success if ok else st.warning)(msg)
+
+
+# ── 👤 Personen ───────────────────────────────────────────────────────
+
+def _on_people_edit(key: str, shorts: list[str]) -> None:
+    cfg = _cfg_copy()
+    moves, errors = [], []
+    for ridx, changes in st.session_state[key].get("edited_rows", {}).items():
+        short = shorts[int(ridx)]
+        m = _member(cfg, short)
+        for col, val in changes.items():
+            if col == "Name":
+                if _s(val):
+                    m["name"] = _s(val)
+                else:
+                    errors.append("Name darf nicht leer sein")
+            elif col == "%" and _s(val):
+                m["pct"] = int(float(val))
+            elif col == "Aktiv":
+                m["aktiv"] = _b(val)
+            elif col == "Funktion":
+                ak.set_funktion(cfg, short, _s(val) or "Team")
+            elif col in DAY_KEYS:
+                anw = dict(m.get("anwesend", {}))
+                anw[col] = _s(val) or "ganz"
+                m["anwesend"] = {dk: anw[dk] for dk in DAY_KEYS if anw.get(dk, "ganz") != "ganz"}
+            elif col == "Bemerkung":
+                m["bemerkung"] = _s(val)
+            elif col == "Nr." and _s(val):
+                moves.append((short, int(float(val))))
+    if errors:
+        _fail(errors)
+        return
+    for short, pos in moves:
+        lst = cfg["mitarbeiter"]
+        m = _member(cfg, short)
+        lst.remove(m)
+        lst.insert(max(0, min(len(lst), pos - 1)), m)
+    commit_cb(cfg, msg="Reihenfolge geändert" if moves else "", remount=True)
+
+
+@st.dialog("Neue Person", width="large")
+def dialog_add_person() -> None:
+    cfg = st.session_state.cfg
+    shorts = [m["short"] for m in cfg["mitarbeiter"]]
+    name = st.text_input("Name, wie er im Plan erscheint", placeholder="z. B. Sandra K.")
+    c1, c2 = st.columns(2)
+    pct = c1.number_input("Pensum %", min_value=10, max_value=100, value=100, step=10)
+    fkt = c2.selectbox("Funktion", ak.FUNKTIONEN,
+                       help="Teamleitung: Tagesverantwortung, Queue, 18-Uhr-Liste Montag · nur Telefon: immer TEL · "
+                            "Aushilfe: täglich PO/SCAN + scanning")
+    st.markdown(f"**Anwesenheit** <span style='color:var(--text-mute); font-size:12px;'>{HALBTAG_HILFE}</span>",
+                unsafe_allow_html=True)
+    dcols = st.columns(5)
+    anw = {dk: dcols[i].selectbox(dk, HALBTAG_WERTE, key=f"np_anw_{dk}") for i, dk in enumerate(DAY_KEYS)}
+    c3, c4 = st.columns(2)
+    regs = [m["short"] for m in cfg["mitarbeiter"] if ak.funktion(m) in ("Team", "Teamleitung")]
+    vorlage = c3.selectbox("Rollen übernehmen von (optional)", ["–"] + regs,
+                           format_func=lambda s: "– keine –" if s == "–" else disp(s),
+                           help="Die neue Person darf dann dieselben Aufgaben – anpassen unter «Wer darf was».")
+    nach = c4.selectbox("Position im Plan", ["–"] + shorts,
+                        format_func=lambda s: "ganz unten" if s == "–" else f"nach {disp(s)}")
+    if st.button("➕  Hinzufügen", type="primary"):
+        name = name.strip()
+        if not name:
+            st.error("Bitte einen Namen eingeben.")
+            return
+        new = _cfg_copy()
+        short = ak.new_short(name, new)
+        m = {"short": short, "name": name, "pct": int(pct), "aktiv": True, "tl": False,
+             "nur_tel": False, "aushilfe": False,
+             "kann": list(_member(new, vorlage).get("kann", [])) if vorlage != "–" else [],
+             "anwesend": {dk: v for dk, v in anw.items() if v != "ganz"},
+             "frei_alle_2_wochen": None, "fix": [], "bemerkung": ""}
+        lst = new["mitarbeiter"]
+        lst.insert(len(lst) if nach == "–" else [x["short"] for x in lst].index(nach) + 1, m)
+        ak.set_funktion(new, short, fkt)
+        errors = try_commit(new, msg=f"{name} hinzugefügt – Rollen unter «Wer darf was» prüfen", remount=True)
+        if errors:
+            st.error(" · ".join(errors))
+            return
+        st.rerun()
+
+
+@st.dialog("Person entfernen")
+def dialog_remove_person() -> None:
+    cfg = st.session_state.cfg
+    shorts = [m["short"] for m in cfg["mitarbeiter"]]
+    who = st.selectbox("Wen?", shorts, format_func=lambda s: disp(s) + ("" if _member(cfg, s).get("aktiv", True) else " (inaktiv)"))
+    aktiv = _member(cfg, who).get("aktiv", True)
+    st.warning(f"**{disp(who)}** wird mit allen Rollen und festen Einsätzen gelöscht.\n\n"
+               "Nur vorübergehend weg (krank, Mutterschutz, lange Ferien)? Dann besser **deaktivieren** – "
+               "so bleibt alles erhalten, und später genügt das Häkchen «Aktiv».")
+    refs = ak.rotation_refs(cfg, who)
+    if refs:
+        st.info("Wird beim Entfernen auch hier herausgenommen: " + ", ".join(refs))
+    c1, c2, c3 = st.columns(3)
+    if c1.button("Deaktivieren", width="stretch", disabled=not aktiv):
+        new = _cfg_copy()
+        _member(new, who)["aktiv"] = False
+        try_commit(new, msg=f"{disp(who)} deaktiviert", remount=True)
+        st.rerun()
+    if c2.button("Endgültig entfernen", type="primary", width="stretch"):
+        name = disp(who)
+        new = _cfg_copy()
+        ak.remove_member(new, who)
+        try_commit(new, msg=f"{name} entfernt", remount=True)
+        st.rerun()
+    if c3.button("Abbrechen", width="stretch"):
+        st.rerun()
+
+
+def section_people(ver: int) -> None:
+    cfg = st.session_state.cfg
+    members = cfg["mitarbeiter"]
+    c1, c2, c3 = st.columns([1.2, 1.5, 6], vertical_alignment="center")
+    if c1.button("➕  Neue Person", key=f"btn_add_person_{ver}", type="primary", width="stretch"):
+        dialog_add_person()
+    if c2.button("🗑️  Person entfernen …", key=f"btn_rm_person_{ver}", width="stretch"):
+        dialog_remove_person()
+    c3.caption("Direkt in der Tabelle ändern – jede Änderung gilt sofort. **Aktiv** ausschalten, wenn jemand "
+               "vorübergehend nicht eingeplant werden soll; Rollen und feste Einsätze bleiben dann erhalten. "
+               "**Nr.** ändern verschiebt die Person im Plan.")
+    rows = [{"Nr.": i + 1, "Name": m.get("name") or m["short"], "%": int(m.get("pct", 100)),
+             "Aktiv": bool(m.get("aktiv", True)), "Funktion": ak.funktion(m),
+             **{dk: m.get("anwesend", {}).get(dk, "ganz") for dk in DAY_KEYS},
+             "Bemerkung": m.get("bemerkung", "")} for i, m in enumerate(members)]
+    df = pd.DataFrame(rows, columns=["Nr.", "Name", "%", "Aktiv", "Funktion"] + DAY_KEYS + ["Bemerkung"])
     col_config = {
-        "Kurzname": st.column_config.TextColumn("Kurzname", help="Eindeutig, wird im Plan und in Rotationen verwendet", width="small"),
-        "Name": st.column_config.TextColumn("Name (Anzeige)", help="z.B. Vorname + Initial: «Christina B.»", width="medium"),
-        "%": st.column_config.NumberColumn("%", min_value=0, max_value=100, step=10, width="small"),
-        "Aktiv": st.column_config.CheckboxColumn("Aktiv", width="small"),
-        "TL": st.column_config.CheckboxColumn("TL", help="Teamleitung: Tagesverantwortung, Queue, PHC Montag", width="small"),
-        "nur TEL": st.column_config.CheckboxColumn("nur TEL", help="Wird ausschliesslich mit TEL eingeplant", width="small"),
-        "Aushilfe": st.column_config.CheckboxColumn("Aushilfe", help="Täglich PO/SCAN (VM) + scanning (NM), keine anderen Rollen", width="small"),
+        "Nr.": st.column_config.NumberColumn("Nr.", min_value=1, max_value=max(1, len(rows)), step=1, width=48,
+                                             help="Reihenfolge im Plan – Zahl ändern, um die Person zu verschieben"),
+        "Name": st.column_config.TextColumn("Name", width=140, pinned=True,
+                                            help="So erscheint die Person im Plan, z. B. «Sandra K.»"),
+        "%": st.column_config.NumberColumn("%", min_value=0, max_value=100, step=5, width=56, help="Pensum in Prozent"),
+        "Aktiv": st.column_config.CheckboxColumn("Aktiv", width=60,
+                                                 help="Aus = wird vorübergehend nicht eingeplant"),
+        "Funktion": st.column_config.SelectboxColumn(
+            "Funktion", options=ak.FUNKTIONEN, required=True, width=120,
+            help="Teamleitung: Tagesverantwortung, Queue, 18-Uhr-Liste Montag · nur Telefon: immer TEL · "
+                 "Aushilfe: täglich PO/SCAN + scanning"),
         "Bemerkung": st.column_config.TextColumn("Bemerkung", width="large"),
     }
     for dk in DAY_KEYS:
-        col_config[dk] = st.column_config.SelectboxColumn(dk, options=HALBTAG_WERTE, required=True, width="small")
-    edited = st.data_editor(df, column_config=col_config, hide_index=True, num_rows="dynamic",
-                            width="stretch", key=f"team_editor_{ver}")
-    c1, c2 = st.columns([1, 4])
-    with c1:
-        if st.button("✓  Übernehmen", key="team_apply", type="primary", width="stretch"):
-            probs = _apply_people_table(edited)
-            if probs:
-                st.error("Nicht übernommen: " + "; ".join(probs))
-            else:
-                st.success("Personen übernommen – unter «Speichern / Laden» dauerhaft sichern.")
-                st.rerun()
-    with c2:
-        st.caption("Neue Personen bekommen noch keine Rollen – diese im Tab «Rollen & Fixeinsätze» setzen.")
+        col_config[dk] = st.column_config.SelectboxColumn(dk, options=HALBTAG_WERTE, required=True, width=64,
+                                                          help=f"Anwesenheit {dk}: {HALBTAG_HILFE}")
+    key = f"people_{ver}"
+    st.data_editor(df, key=key, column_config=col_config, hide_index=True, num_rows="fixed", width="stretch",
+                   height=_editor_height(len(df)), on_change=_on_people_edit, args=(key, [m["short"] for m in members]))
 
 
-def render_team_roles(ver: int) -> None:
+# ── 🎯 Wer darf was ───────────────────────────────────────────────────
+
+def _on_roles_edit(key: str, shorts: list[str]) -> None:
+    cfg = _cfg_copy()
+    by_label = {lbl: r for r, lbl in ROLLEN_SPALTEN.items()}
+    for ridx, changes in st.session_state[key].get("edited_rows", {}).items():
+        m = _member(cfg, shorts[int(ridx)])
+        kann = list(m.get("kann", []))
+        for col, val in changes.items():
+            if col == "Schalter":
+                kann = [r for r in kann if r not in ("Schalter", "Schalter-Reserve")]
+                if val == "ja":
+                    kann.append("Schalter")
+                elif val == "Reserve":
+                    kann.append("Schalter-Reserve")
+            elif col in by_label:
+                role = by_label[col]
+                kann = [r for r in kann if r != role] + ([role] if _b(val) else [])
+        m["kann"] = kann
+    commit_cb(cfg, remount=True)
+
+
+def section_roles(ver: int) -> None:
+    cfg = st.session_state.cfg
+    regs = [m for m in cfg["mitarbeiter"] if not m.get("nur_tel") and not m.get("aushilfe")]
+    st.caption("Häkchen = darf diese Aufgabe übernehmen – der Generator verteilt Aufgaben nur an Personen mit Häkchen. "
+               "**Schalter**: «ja» = regulär (zwei Gruppen im Wochenwechsel), «Reserve» = nur, wenn aus der Gruppe "
+               "niemand frei ist. Teamleitungen (TL) bekommen nie TAGES PA oder Postöffnung. "
+               "Personen mit «nur Telefon» oder «Aushilfe» fehlen hier – sie haben feste Aufgaben.")
+    rows = []
+    for m in regs:
+        kann = set(m.get("kann", []))
+        label = (m.get("name") or m["short"]) + (" · TL" if m.get("tl") else "") + \
+                ("" if m.get("aktiv", True) else " (inaktiv)")
+        row = {"Name": label,
+               "Schalter": "ja" if "Schalter" in kann else "Reserve" if "Schalter-Reserve" in kann else "–"}
+        row.update({lbl: r in kann for r, lbl in ROLLEN_SPALTEN.items()})
+        rows.append(row)
+    df = pd.DataFrame(rows, columns=["Name", "Schalter"] + list(ROLLEN_SPALTEN.values()))
+    col_config = {
+        "Name": st.column_config.TextColumn("Name", disabled=True, pinned=True, width=170),
+        "Schalter": st.column_config.SelectboxColumn("Schalter", options=SCHALTER_WAHL, required=True, width=90,
+                                                     help="ja = regulär · Reserve = nur wenn aus der Gruppe niemand frei ist"),
+    }
+    for r, lbl in ROLLEN_SPALTEN.items():
+        col_config[lbl] = st.column_config.CheckboxColumn(lbl, help=ROLLEN[r], width=max(62, int(7.5 * len(lbl)) + 26))
+    key = f"roles_{ver}"
+    st.data_editor(df, key=key, column_config=col_config, hide_index=True, num_rows="fixed", width="stretch",
+                   height=_editor_height(len(df)), on_change=_on_roles_edit, args=(key, [m["short"] for m in regs]))
+    act = [m for m in regs if m.get("aktiv", True)]
+    counts = [("Schalter", sum("Schalter" in m.get("kann", []) for m in act))] + \
+             [(lbl, sum(r in m.get("kann", []) for m in act)) for r, lbl in ROLLEN_SPALTEN.items() if r != "VBZ"]
+    st.caption("Aktive Personen pro Aufgabe: " +
+               " · ".join(f"{lbl} **{n}**" + (" ⚠️" if n <= 1 else "") for lbl, n in counts))
+
+
+# ── 📌 Feste Einsätze ────────────────────────────────────────────────
+
+def _fix_options(cfg: dict) -> list[str]:
+    opts = [FREI] + [t for t in TASK_OPTIONS if t and t not in ("KRANK", "FERIEN")]
+    for r in ak.recurring_rows(cfg):
+        if r["task"] != "frei" and r["task"] not in opts:
+            opts.append(r["task"])
+    return opts
+
+
+def _commit_recurring(rows: list[dict], msg: str = "", remount: bool = False) -> list[str]:
+    cfg = _cfg_copy()
+    errors = ak.apply_recurring_rows(cfg, rows)
+    return errors or try_commit(cfg, msg=msg, remount=remount)
+
+
+def _on_fixed_edit(key: str, base: list[dict]) -> None:
+    rows = [dict(r) for r in base]
+    removed = set()
+    for ridx, changes in st.session_state[key].get("edited_rows", {}).items():
+        i = int(ridx)
+        r = rows[i]
+        for col, val in changes.items():
+            if col == "entfernen" and _b(val):
+                removed.add(i)
+            elif col == "Tag":
+                r["tag"] = _s(val) or r["tag"]
+            elif col == "Halbtag":
+                r["halbtag"] = _s(val) or r["halbtag"]
+            elif col == "Einsatz" and _s(val):
+                r["task"] = "frei" if _s(val) == FREI else _s(val)
+            elif col == "Wochen":
+                r["kw"] = WOCHEN.get(_s(val))
+    errors = _commit_recurring([r for i, r in enumerate(rows) if i not in removed],
+                               msg="Fester Einsatz entfernt" if removed else "", remount=True)
+    if errors:
+        _fail(errors)
+
+
+def section_fixed(ver: int) -> None:
     cfg = st.session_state.cfg
     shorts = [m["short"] for m in cfg["mitarbeiter"]]
-    if not shorts:
-        st.info("Keine Personen vorhanden.")
+    st.caption("Was jede Woche – oder jede zweite Woche – fix ist, z. B. «Mo ganz ERF9», «Di VM KGS» oder "
+               "«alle 2 Wochen Fr frei». Der Generator plant diese Einsätze vor allem anderen. "
+               f"Die angezeigte **KW {info['kw']}** ist eine **{'gerade' if info['is_even'] else 'ungerade'}** Woche.")
+    opts = _fix_options(cfg)
+    with st.form(f"add_fix_{ver}", border=True):
+        st.markdown("**Neuer fester Einsatz**")
+        c = st.columns([2, 0.9, 1, 1.6, 1.3, 1.3], vertical_alignment="bottom")
+        who = c[0].selectbox("Person", shorts, format_func=disp)
+        tag = c[1].selectbox("Tag", DAY_KEYS)
+        halb = c[2].selectbox("Halbtag", ["ganz", "VM", "NM"])
+        task = c[3].selectbox("Einsatz", opts, index=opts.index("HO") if "HO" in opts else 0,
+                              help="«frei» = an diesem Tag nicht da (nur mit «gerade KW» / «ungerade KW»)")
+        wochen = c[4].selectbox("Wochen", list(WOCHEN))
+        if c[5].form_submit_button("➕  Hinzufügen", type="primary", width="stretch"):
+            new_row = {"short": who, "tag": tag, "halbtag": halb, "task": "frei" if task == FREI else task,
+                       "kw": WOCHEN[wochen]}
+            errors = _commit_recurring(ak.recurring_rows(cfg) + [new_row],
+                                       msg=f"{disp(who)}: {tag} {halb} {task} hinzugefügt", remount=True)
+            if errors:
+                st.error(" · ".join(errors))
+            else:
+                st.rerun()
+
+    base = ak.recurring_rows(cfg)
+    if not base:
+        st.info("Noch keine festen Einsätze.")
         return
-    labels = {person_label(s): s for s in shorts}
-    who = labels[st.selectbox("Person", list(labels.keys()), key=f"roles_person_{ver}")]
-    m = next(x for x in cfg["mitarbeiter"] if x["short"] == who)
-
-    st.markdown('<div class="field-label" style="margin-top:8px;">Darf / macht</div>', unsafe_allow_html=True)
-    ropts = role_options()
-    kann_labels = st.multiselect("Rollen", list(ropts.keys()),
-                                 default=[lbl for lbl, r in ropts.items() if r in m.get("kann", [])],
-                                 key=f"roles_kann_{ver}_{who}", label_visibility="collapsed")
-    kann = [ropts[lbl] for lbl in kann_labels]
-
-    st.markdown('<div class="field-label" style="margin-top:8px;">Alle 2 Wochen frei</div>', unsafe_allow_html=True)
-    f2 = m.get("frei_alle_2_wochen") or {}
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c1:
-        par_opts = ["nie"] + PARITAET
-        par = st.selectbox("In KW", par_opts, index=par_opts.index(f2["kw"]) if f2.get("kw") in PARITAET else 0,
-                           key=f"roles_par_{ver}_{who}")
-    with c2:
-        f2_days = st.multiselect("Tage", DAY_KEYS, default=[d for d in f2.get("tage", {}) if d in DAY_KEYS],
-                                 key=f"roles_f2days_{ver}_{who}")
-    with c3:
-        vals = [v for v in f2.get("tage", {}).values()]
-        f2_val = st.selectbox("Halbtag", ["ganz", "VM", "NM"], index=["ganz", "VM", "NM"].index(vals[0]) if vals and vals[0] in ("ganz", "VM", "NM") else 0,
-                              key=f"roles_f2val_{ver}_{who}")
-
-    st.markdown('<div class="field-label" style="margin-top:8px;">Fixe Einsätze (jede Woche, oder nur in geraden/ungeraden KW)</div>',
-                unsafe_allow_html=True)
-    fix_df = pd.DataFrame([{"Tag": f.get("tag", "Mo"), "Halbtag": f.get("halbtag", "ganz"),
-                            "Task": f.get("task", ""), "KW": f.get("kw") or "jede"} for f in m.get("fix", [])],
-                          columns=["Tag", "Halbtag", "Task", "KW"])
-    fix_edit = st.data_editor(
-        fix_df, hide_index=True, num_rows="dynamic", width="stretch", key=f"roles_fix_{ver}_{who}",
+    inaktiv = {m["short"] for m in cfg["mitarbeiter"] if not m.get("aktiv", True)}
+    df = pd.DataFrame([{"Person": disp(r["short"]) + (" (inaktiv)" if r["short"] in inaktiv else ""),
+                        "Tag": r["tag"], "Halbtag": r["halbtag"],
+                        "Einsatz": FREI if r["task"] == "frei" else r["task"],
+                        "Wochen": WOCHEN_LABEL.get(r["kw"], "jede Woche"), "entfernen": False} for r in base],
+                      columns=["Person", "Tag", "Halbtag", "Einsatz", "Wochen", "entfernen"])
+    key = f"fixed_{ver}"
+    st.data_editor(
+        df, key=key, hide_index=True, num_rows="fixed", width="stretch", height=_editor_height(len(df)),
+        disabled=["Person"], on_change=_on_fixed_edit, args=(key, base),
         column_config={
-            "Tag": st.column_config.SelectboxColumn("Tag", options=DAY_KEYS, required=True),
-            "Halbtag": st.column_config.SelectboxColumn("Halbtag", options=["ganz", "VM", "NM"], required=True),
-            "Task": st.column_config.SelectboxColumn("Task", options=[t for t in TASK_OPTIONS if t], required=True),
-            "KW": st.column_config.SelectboxColumn("KW", options=["jede"] + PARITAET, required=True),
+            "Person": st.column_config.TextColumn("Person", width="medium"),
+            "Tag": st.column_config.SelectboxColumn("Tag", options=DAY_KEYS, required=True, width="small"),
+            "Halbtag": st.column_config.SelectboxColumn("Halbtag", options=["ganz", "VM", "NM"], required=True, width="small"),
+            "Einsatz": st.column_config.SelectboxColumn("Einsatz", options=opts, required=True, width="medium"),
+            "Wochen": st.column_config.SelectboxColumn("Wochen", options=list(WOCHEN), required=True, width="small"),
+            "entfernen": st.column_config.CheckboxColumn("entfernen", width="small", help="Anhaken = Zeile löschen"),
         })
 
-    if st.button("✓  Übernehmen", key=f"roles_apply_{who}", type="primary"):
-        new_cfg = copy.deepcopy(cfg)
-        mm = next(x for x in new_cfg["mitarbeiter"] if x["short"] == who)
-        mm["kann"] = list(kann)
-        mm["frei_alle_2_wochen"] = ({"kw": par, "tage": {d: f2_val for d in f2_days}}
-                                    if par in PARITAET and f2_days else None)
-        fixes = []
-        for _, r in fix_edit.iterrows():
-            if not _s(r.get("Task")):
+
+# ── 🔄 Rotationen ────────────────────────────────────────────────────
+
+def _on_rot_list(key: str, field: str, hidden: list[str]) -> None:
+    cfg = _cfg_copy()
+    cfg["rotation"][field] = list(st.session_state[key]) + [n for n in hidden if n not in st.session_state[key]]
+    commit_cb(cfg)
+
+
+def _on_rot_now(key: str, off_key: str, pool: list[str], widx: int, mult: int) -> None:
+    cfg = _cfg_copy()
+    cfg["rotation"]["offset"][off_key] = (pool.index(st.session_state[key]) - widx * mult) % len(pool)
+    commit_cb(cfg)
+
+
+def _on_rot_value(key: str, field: str) -> None:
+    cfg = _cfg_copy()
+    v = st.session_state[key]
+    cfg["rotation"][field] = "" if v == "–" else v
+    commit_cb(cfg)
+
+
+def _on_phc_fix(key: str, dk: str) -> None:
+    cfg = _cfg_copy()
+    fix = dict(cfg["rotation"]["phc_fix"])
+    if st.session_state[key] == "–":
+        fix.pop(dk, None)
+    else:
+        fix[dk] = st.session_state[key]
+    cfg["rotation"]["phc_fix"] = {d: fix[d] for d in DAY_KEYS if d in fix}
+    commit_cb(cfg)
+
+
+def _on_phc_excl(key: str, shorts: list[str]) -> None:
+    cfg = _cfg_copy()
+    ex = {dk: list(v) for dk, v in cfg["rotation"]["phc_tag_ausschluss"].items()}
+    for ridx, changes in st.session_state[key].get("edited_rows", {}).items():
+        s = shorts[int(ridx)]
+        for dk, val in changes.items():
+            lst = [n for n in ex.get(dk, []) if n != s]
+            ex[dk] = lst + [s] if _b(val) else lst
+    cfg["rotation"]["phc_tag_ausschluss"] = {dk: ex[dk] for dk in DAY_KEYS if ex.get(dk)}
+    commit_cb(cfg, remount=True)
+
+
+def _rotation_block(ver: int, title: str, caption: str, field: str, off_key: str, options: list[str],
+                    now_label: str, mult: int = 1) -> list[str]:
+    """Liste «wer, in welcher Reihenfolge» + «wer ist in der angezeigten Woche dran»."""
+    rot = st.session_state.cfg["rotation"]
+    widx = info["widx"]
+    st.markdown(f"**{title}**")
+    st.caption(caption)
+    current = [n for n in rot[field] if n in options]
+    hidden = [n for n in rot[field] if n not in options]
+    key = f"rot_{field}_{ver}"
+    pool = st.multiselect(title, options, default=current, format_func=disp, key=key, label_visibility="collapsed",
+                          placeholder="Personen wählen – Reihenfolge = Reihenfolge der Auswahl",
+                          on_change=_on_rot_list, args=(key, field, hidden))
+    if hidden:
+        st.caption("Inaktiv, wird übersprungen: " + ", ".join(disp(n) for n in hidden))
+    if pool:
+        idx = (widx * mult + rot["offset"].get(off_key, 0)) % len(pool)
+        nkey = f"rot_{off_key}_now_{ver}_{'|'.join(pool)}"
+        st.selectbox(now_label, pool, index=idx, format_func=disp, key=nkey,
+                     on_change=_on_rot_now, args=(nkey, off_key, list(pool), widx, mult))
+    return pool
+
+
+def _rotation_preview(cfg: dict, n_weeks: int = 6) -> pd.DataFrame:
+    """Wer ist in den nächsten Wochen laut Rotation dran (ohne Abwesenheiten)."""
+    rot, off = cfg["rotation"], cfg["rotation"]["offset"]
+    act = [m for m in cfg["mitarbeiter"] if m.get("aktiv", True)]
+    act_set = {m["short"] for m in act}
+    reg = [m for m in act if not m.get("nur_tel") and not m.get("aushilfe")]
+    tv = [n for n in rot["tv_reihenfolge"] if n in act_set] or [m["short"] for m in act if m.get("tl")]
+    lists = {k: [n for n in rot[k] if n in act_set] for k in ("phc_montag_tl", "phc_freitag_wechsel", "labor_mi_nm")}
+    wa_pools = {lbl: [m["short"] for m in reg if lbl in m.get("kann", [])] for lbl in ("Direkt", "ONB", "BTM")}
+
+    def at(lst, w, off_key, mult=1):
+        return disp(lst[(w * mult + off.get(off_key, 0)) % len(lst)]) if lst else "–"
+
+    rows = []
+    for i in range(n_weeks):
+        w = info["widx"] + i
+        monday = info["monday"] + timedelta(weeks=i)
+        used, wa = set(), {}
+        for lbl, pool in wa_pools.items():
+            if not pool:
+                wa[lbl] = "–"
                 continue
-            fx = {"tag": _s(r.get("Tag")) or "Mo", "halbtag": _s(r.get("Halbtag")) or "ganz", "task": _s(r.get("Task"))}
-            if _s(r.get("KW")) in PARITAET:
-                fx["kw"] = _s(r.get("KW"))
-            fixes.append(fx)
-        mm["fix"] = fixes
-        probs = ak.validate_config(ak.normalize_config(new_cfg))
-        if probs:
-            st.error("; ".join(probs))
-        else:
-            replace_cfg(new_cfg)
-            st.success(f"{who} übernommen.")
-            st.rerun()
+            idx = (w + off.get(lbl, 0)) % len(pool)
+            cand = next((pool[(idx + j) % len(pool)] for j in range(len(pool))
+                         if pool[(idx + j) % len(pool)] not in used), pool[idx])
+            used.add(cand)
+            wa[lbl] = disp(cand)
+        rows.append({
+            "KW": f"KW {monday.isocalendar()[1]}", "ab": monday.strftime("%d.%m."),
+            "TV Montag": at(tv, w, "tv", 5), "18-Uhr Mo": at(lists["phc_montag_tl"], w, "phc_montag"),
+            "18-Uhr Fr": at(lists["phc_freitag_wechsel"], w, "phc_freitag"),
+            "Labor Mi": at(lists["labor_mi_nm"], w, "labor"),
+            "Schalter": "Gruppe A" if (w + off.get("schalter", 0)) % 2 == 0 else "Gruppe B", **wa,
+        })
+    return pd.DataFrame(rows)
 
 
-def _rotation_now(lst: list[str], offset: int, widx: int, mult: int = 1) -> int | None:
-    if not lst:
-        return None
-    return (widx * mult + offset) % len(lst)
-
-
-def render_team_rotation(ver: int) -> None:
+def section_rotation(ver: int) -> None:
     cfg = st.session_state.cfg
     rot = cfg["rotation"]
-    rules = cfg["regeln"]
-    act = active_shorts()
-    tls = [m["short"] for m in active_members() if m.get("tl")]
     widx = info["widx"]
-    st.caption(f"Rotationen werden aus der Kalenderwoche berechnet (keine Zustandsdatei). "
-               f"Mit «diese Woche (KW {info['kw']})» stellst du ein, wer in der angezeigten Woche dran ist – "
-               f"die Folgewochen ergeben sich daraus.")
+    kw = info["kw"]
+    act = [m for m in cfg["mitarbeiter"] if m.get("aktiv", True)]
+    reg = [m for m in act if not m.get("nur_tel") and not m.get("aushilfe")]
+    tls = [m["short"] for m in act if m.get("tl")]
+    phc_ok = [m["short"] for m in reg if "PHC" in m.get("kann", [])]
+    st.caption(f"Rotationen ergeben sich aus der Kalenderwoche. Mit «diese Woche» stellst du ein, wer in der "
+               f"angezeigten **KW {kw}** dran ist – die Folgewochen laufen von dort aus weiter (Vorschau unten). "
+               f"Die Reihenfolge entspricht der Reihenfolge der Auswahl: zum Umsortieren Person entfernen (×) und neu wählen.")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<div class="field-label">Tagesverantwortung – Reihenfolge der TL</div>', unsafe_allow_html=True)
-        tv_order = st.multiselect("TV Reihenfolge", tls, default=[n for n in rot["tv_reihenfolge"] if n in tls],
-                                  key=f"rot_tv_{ver}", label_visibility="collapsed",
-                                  help="Reihenfolge = Rotationsreihenfolge Tag für Tag")
-        tv_list = tv_order or tls
-        tv_idx = _rotation_now(tv_list, rot["offset"]["tv"], widx, mult=5)
-        tv_now = st.selectbox(f"TV am Montag diese Woche (KW {info['kw']})", tv_list,
-                              index=tv_idx or 0, key=f"rot_tvnow_{ver}") if tv_list else None
+    left, right = st.columns(2, gap="large")
+    with left:
+        with st.container(border=True):
+            tv = _rotation_block(ver, "Tagesverantwortung (TV)",
+                                 "Die Teamleitungen wechseln sich Tag für Tag ab. Leer = alle Teamleitungen.",
+                                 "tv_reihenfolge", "tv", tls, f"TV am Montag, KW {kw}", mult=5)
+            tv_list = tv or tls
+            if tv_list:
+                start = (widx * 5 + rot["offset"]["tv"]) % len(tv_list)
+                st.caption("Diese Woche: " + " · ".join(f"{DAY_KEYS[d]} {disp(tv_list[(start + d) % len(tv_list)])}"
+                                                         for d in range(5)))
+        with st.container(border=True):
+            _rotation_block(ver, "Labor Mi Nachmittag (ERF5)", "Wöchentlicher Wechsel.",
+                            "labor_mi_nm", "labor", [m["short"] for m in reg], f"Labor in KW {kw}")
+        with st.container(border=True):
+            st.markdown("**Schalter-Gruppe**")
+            sch_pool = [m["short"] for m in reg if "Schalter" in m.get("kann", [])]
+            mid = (len(sch_pool) + 1) // 2
+            groups = [sch_pool[:mid], sch_pool[mid:]]
+            st.caption("Alle mit Schalter «ja» (unter «Wer darf was») werden in Plan-Reihenfolge in zwei Gruppen "
+                       "geteilt, die sich wöchentlich abwechseln.")
+            key = f"rot_schalter_{ver}_{'|'.join(sch_pool)}"
+            st.selectbox(f"Aktive Gruppe in KW {kw}", [0, 1], index=(widx + rot["offset"]["schalter"]) % 2, key=key,
+                         format_func=lambda g: f"Gruppe {'AB'[g]}: {', '.join(disp(n) for n in groups[g]) or '–'}",
+                         on_change=_on_rot_now, args=(key, "schalter", [0, 1], widx, 1))
+        with st.container(border=True):
+            st.markdown("**Wochenaufgaben**")
+            st.caption("Je eine Person pro Woche, nie dieselbe doppelt. Wer infrage kommt, steht unter «Wer darf was».")
+            wcols = st.columns(3)
+            for col, label in zip(wcols, ("Direkt", "ONB", "BTM")):
+                pool = [m["short"] for m in reg if label in m.get("kann", [])]
+                if not pool:
+                    col.caption(f"{label}: niemand berechtigt")
+                    continue
+                key = f"rot_wa_{label}_{ver}_{'|'.join(pool)}"
+                col.selectbox(f"{label} in KW {kw}", pool, index=(widx + rot["offset"].get(label, 0)) % len(pool),
+                              format_func=disp, key=key, on_change=_on_rot_now, args=(key, label, pool, widx, 1))
 
-        st.markdown('<div class="field-label" style="margin-top:8px;">PHC-Liste Montag – TL im Wechsel</div>', unsafe_allow_html=True)
-        phc_mo = st.multiselect("PHC Montag", tls, default=[n for n in rot["phc_montag_tl"] if n in tls],
-                                key=f"rot_phcmo_{ver}", label_visibility="collapsed")
-        phc_mo_idx = _rotation_now(phc_mo, rot["offset"]["phc_montag"], widx)
-        phc_mo_now = st.selectbox(f"PHC Montag diese Woche (KW {info['kw']})", phc_mo, index=phc_mo_idx or 0,
-                                  key=f"rot_phcmonow_{ver}") if phc_mo else None
+    with right:
+        with st.container(border=True):
+            st.markdown("**18-Uhr-Liste (PHC)**")
+            _rotation_block(ver, "Montag – Teamleitungen im Wechsel", "Wöchentlicher Wechsel.",
+                            "phc_montag_tl", "phc_montag", tls, f"Montag in KW {kw}")
+            _rotation_block(ver, "Freitag – im Wechsel", "Wöchentlicher Wechsel. Leer = aus dem Pool.",
+                            "phc_freitag_wechsel", "phc_freitag", phc_ok, f"Freitag in KW {kw}")
+            st.markdown("**Fix an einem Wochentag**")
+            st.caption("Diese Person macht die 18-Uhr-Liste an diesem Tag immer (wenn sie da ist). "
+                       "Montag und Freitag laufen über die Wechsel oben, sofern dort jemand eingetragen ist. "
+                       "– = jemand aus dem Pool.")
+            fcols = st.columns(5)
+            for i, dk in enumerate(DAY_KEYS):
+                cur = rot["phc_fix"].get(dk, "–")
+                opts = ["–"] + phc_ok + ([cur] if cur not in phc_ok and cur != "–" else [])
+                key = f"rot_phcfix_{dk}_{ver}"
+                fcols[i].selectbox(dk, opts, index=opts.index(cur), key=key, format_func=lambda s: s if s == "–" else disp(s),
+                                   on_change=_on_phc_fix, args=(key, dk))
+            st.markdown("**Nie an diesem Tag**")
+            st.caption("Häkchen = diese Person kommt an diesem Wochentag nicht auf die 18-Uhr-Liste.")
+            ex = rot["phc_tag_ausschluss"]
+            df = pd.DataFrame([{"Name": disp(s), **{dk: s in ex.get(dk, []) for dk in DAY_KEYS}} for s in phc_ok],
+                              columns=["Name"] + DAY_KEYS)
+            key = f"rot_phcex_{ver}"
+            st.data_editor(df, key=key, hide_index=True, num_rows="fixed", width="stretch",
+                           height=_editor_height(len(df)), disabled=["Name"], on_change=_on_phc_excl, args=(key, phc_ok),
+                           column_config={"Name": st.column_config.TextColumn("Name", width="medium"),
+                                          **{dk: st.column_config.CheckboxColumn(dk, width="small") for dk in DAY_KEYS}})
 
-        st.markdown('<div class="field-label" style="margin-top:8px;">PHC-Liste Freitag – im Wechsel</div>', unsafe_allow_html=True)
-        phc_fr = st.multiselect("PHC Freitag", act, default=[n for n in rot["phc_freitag_wechsel"] if n in act],
-                                key=f"rot_phcfr_{ver}", label_visibility="collapsed")
-        phc_fr_idx = _rotation_now(phc_fr, rot["offset"]["phc_freitag"], widx)
-        phc_fr_now = st.selectbox(f"PHC Freitag diese Woche (KW {info['kw']})", phc_fr, index=phc_fr_idx or 0,
-                                  key=f"rot_phcfrnow_{ver}") if phc_fr else None
-
-        st.markdown('<div class="field-label" style="margin-top:8px;">Labor Mi NM (ERF5) – im Wechsel</div>', unsafe_allow_html=True)
-        labor = st.multiselect("Labor", act, default=[n for n in rot["labor_mi_nm"] if n in act],
-                               key=f"rot_labor_{ver}", label_visibility="collapsed")
-        labor_idx = _rotation_now(labor, rot["offset"]["labor"], widx)
-        labor_now = st.selectbox(f"Labor diese Woche (KW {info['kw']})", labor, index=labor_idx or 0,
-                                 key=f"rot_labornow_{ver}") if labor else None
-
-    with c2:
-        st.markdown('<div class="field-label">PHC-Liste fix pro Tag (– = aus dem Pool)</div>', unsafe_allow_html=True)
-        phc_fix = {}
-        pcols = st.columns(5)
-        for i, dk in enumerate(DAY_KEYS):
-            cur = rot["phc_fix"].get(dk, "–")
-            opts = ["–"] + act
-            val = pcols[i].selectbox(dk, opts, index=opts.index(cur) if cur in opts else 0, key=f"rot_phcfix_{ver}_{dk}")
-            if val != "–":
-                phc_fix[dk] = val
-
-        st.markdown('<div class="field-label" style="margin-top:8px;">PHC-Liste: an diesen Tagen ausgeschlossen</div>', unsafe_allow_html=True)
-        phc_ex = {}
-        for dk in DAY_KEYS:
-            sel = st.multiselect(dk, act, default=[n for n in rot["phc_tag_ausschluss"].get(dk, []) if n in act],
-                                 key=f"rot_phcex_{ver}_{dk}")
-            if sel:
-                phc_ex[dk] = sel
-
-        st.markdown('<div class="field-label" style="margin-top:8px;">Postöffnung Dienstag bevorzugt</div>', unsafe_allow_html=True)
-        po_opts = ["–"] + act
-        cur = rot.get("po_dienstag_bevorzugt") or "–"
-        po_pref = st.selectbox("PO Di", po_opts, index=po_opts.index(cur) if cur in po_opts else 0,
-                               key=f"rot_popref_{ver}", label_visibility="collapsed")
-
-        st.markdown('<div class="field-label" style="margin-top:8px;">Schalter-Gruppe diese Woche</div>', unsafe_allow_html=True)
-        sch_pool = [m["short"] for m in active_members() if "Schalter" in m.get("kann", [])
-                    and not m.get("nur_tel") and not m.get("aushilfe")]
-        mid = (len(sch_pool) + 1) // 2
-        grp_now = (widx + rot["offset"]["schalter"]) % 2
-        grp_labels = [f"Gruppe A: {', '.join(sch_pool[:mid]) or '–'}", f"Gruppe B: {', '.join(sch_pool[mid:]) or '–'}"]
-        sch_now = st.selectbox("Schalter", grp_labels, index=grp_now, key=f"rot_schnow_{ver}", label_visibility="collapsed")
-
-        st.markdown('<div class="field-label" style="margin-top:8px;">Wochenaufgaben diese Woche</div>', unsafe_allow_html=True)
-        wa_now = {}
-        for label in ("Direkt", "ONB", "BTM"):
-            pool = [m["short"] for m in active_members() if label in m.get("kann", [])
-                    and not m.get("nur_tel") and not m.get("aushilfe")]
-            if pool:
-                idx = (widx + rot["offset"].get(label, 0)) % len(pool)
-                wa_now[label] = (pool, st.selectbox(label, pool, index=idx, key=f"rot_wa_{ver}_{label}"))
-            else:
-                st.caption(f"{label}: niemand berechtigt")
-
-    st.markdown('<div class="field-label" style="margin-top:12px;">Besetzungsregeln</div>', unsafe_allow_html=True)
-    r1, r2, r3, r4, r5 = st.columns(5)
-    tel_mo = r1.number_input("TEL Mo VM", 0, 10, int(rules["tel_montag_vm"]), key=f"rule_telmo_{ver}")
-    tel_s = r2.number_input("TEL sonst", 0, 10, int(rules["tel_sonst"]), key=f"rule_tels_{ver}")
-    abkl = r3.number_input("ABKL / Halbtag", 0, 10, int(rules["abkl_pro_halbtag"]), key=f"rule_abkl_{ver}")
-    po_z = r4.number_input("Zusatz-PO am VM", 0, 5, int(rules["po_zusatz_vm"]), key=f"rule_po_{ver}",
-                           help="Zusätzlich zur PO/SCAN-Person (Aushilfe)")
-    hub = r5.number_input("HUB / Tag", 0, 2, int(rules["hub_pro_tag"]), key=f"rule_hub_{ver}")
-    r6, r7, r8, r9 = st.columns(4)
-    rx = r6.number_input("RX Abo / Woche", 0, 10, int(rules["rx_abo_pro_woche"]), key=f"rule_rx_{ver}")
-    scan_max = r7.number_input("Scanning max. Halbtage/Woche", 0, 10, int(rules["scan_max_halbtage_pro_woche"]), key=f"rule_scanmax_{ver}")
-    scan_p = r8.slider("Scanning-Anteil", 0.0, 1.0, float(rules["scan_anteil"]), 0.05, key=f"rule_scanp_{ver}",
-                       help="Anteil der freien Halbtage, die bei Scanning-Berechtigten zu «scanning» werden")
-    scan_nm = r9.checkbox("NM-Scan-Ersatz, wenn Aushilfe fehlt", bool(rules["scan_nm_ersatz_wenn_aushilfe_fehlt"]), key=f"rule_scannm_{ver}")
-    st.caption("Schalter-Reserve, Schalter-Code, TL am Telefon und TAGES PA mit Telefon: Tab «Entscheidungen».")
-
-    if st.button("✓  Übernehmen", key="rot_apply", type="primary"):
-        new_cfg = copy.deepcopy(cfg)
-        nr = new_cfg["rotation"]
-        nr["tv_reihenfolge"] = list(tv_order)
-        nr["phc_montag_tl"] = list(phc_mo)
-        nr["phc_freitag_wechsel"] = list(phc_fr)
-        nr["labor_mi_nm"] = list(labor)
-        nr["phc_fix"] = phc_fix
-        nr["phc_tag_ausschluss"] = phc_ex
-        nr["po_dienstag_bevorzugt"] = "" if po_pref == "–" else po_pref
-        off = nr["offset"]
-        if tv_list and tv_now in tv_list:
-            off["tv"] = (tv_list.index(tv_now) - widx * 5) % len(tv_list)
-        if phc_mo and phc_mo_now in phc_mo:
-            off["phc_montag"] = (phc_mo.index(phc_mo_now) - widx) % len(phc_mo)
-        if phc_fr and phc_fr_now in phc_fr:
-            off["phc_freitag"] = (phc_fr.index(phc_fr_now) - widx) % len(phc_fr)
-        if labor and labor_now in labor:
-            off["labor"] = (labor.index(labor_now) - widx) % len(labor)
-        off["schalter"] = (grp_labels.index(sch_now) - widx) % 2
-        for label, (pool, chosen) in wa_now.items():
-            off[label] = (pool.index(chosen) - widx) % len(pool)
-        new_cfg["regeln"].update({
-            "tel_montag_vm": int(tel_mo), "tel_sonst": int(tel_s), "abkl_pro_halbtag": int(abkl),
-            "po_zusatz_vm": int(po_z), "hub_pro_tag": int(hub), "rx_abo_pro_woche": int(rx),
-            "scan_max_halbtage_pro_woche": int(scan_max), "scan_anteil": float(scan_p),
-            "scan_nm_ersatz_wenn_aushilfe_fehlt": bool(scan_nm),
-        })
-        probs = ak.validate_config(ak.normalize_config(new_cfg))
-        if probs:
-            st.error("; ".join(probs))
-        else:
-            replace_cfg(new_cfg)
-            st.success("Rotation & Regeln übernommen.")
-            st.rerun()
+    st.markdown(f"**Vorschau – wer ist laut Rotation dran** "
+                f"<span style='color:var(--text-mute); font-size:12px;'>ohne Abwesenheiten; ab KW {kw}</span>",
+                unsafe_allow_html=True)
+    st.dataframe(_rotation_preview(cfg), hide_index=True, width="stretch")
 
 
-def render_team_decisions(ver: int) -> None:
-    """Punkte, die das Team nicht eindeutig geregelt hat – hier entscheidet die Planerin."""
+# ── ⚖️ Regeln ─────────────────────────────────────────────────────────
+
+def _on_rule(key: str, field: str, kind: type) -> None:
+    cfg = _cfg_copy()
+    cfg["regeln"][field] = kind(st.session_state[key])
+    commit_cb(cfg)
+
+
+def _rule_number(container, label: str, field: str, lo: int, hi: int, ver: int, help: str | None = None) -> int:
+    key = f"rule_{field}_{ver}"
+    return container.number_input(label, lo, hi, int(st.session_state.cfg["regeln"][field]), step=1, key=key, help=help,
+                                  on_change=_on_rule, args=(key, field, int))
+
+
+def _rule_select(container, label: str, field: str, options: list[str], ver: int, help: str | None = None) -> None:
+    cur = st.session_state.cfg["regeln"].get(field, options[0])
+    key = f"rule_{field}_{ver}"
+    container.selectbox(label, options, index=options.index(cur) if cur in options else 0, key=key, help=help,
+                        on_change=_on_rule, args=(key, field, str))
+
+
+def section_rules(ver: int) -> None:
     cfg = st.session_state.cfg
     rules = cfg["regeln"]
-    act = active_shorts()
-    st.markdown("Diese Punkte sind im Team **nicht eindeutig geregelt**. Hier legst du fest, wie der "
-                "Generator damit umgeht. Die Einstellung wirkt ab der nächsten Generierung; "
-                "«Speichern / Laden» macht sie dauerhaft.")
-
-    st.markdown("**1 · Schalter: «Brigitte, Saskia, Dragi nicht alle 2 Wochen»**")
-    st.caption("Personen mit Rolle «Schalter» bilden zwei Gruppen, die sich wöchentlich abwechseln "
-               "(jede Person etwa alle 2 Wochen einen ganzen Tag). Reserve-Personen kommen nur dran, "
-               "wenn aus der aktiven Gruppe niemand ganztags frei ist – also seltener. "
-               "Rolle «Schalter» wird bei Reserve-Personen entfernt.")
-    c1, c2, c3 = st.columns([2, 1.4, 1])
-    with c1:
-        reserve = st.multiselect("Schalter-Reserve", act,
-                                 default=[m["short"] for m in active_members() if "Schalter-Reserve" in m.get("kann", [])],
-                                 key=f"dec_reserve_{ver}")
-    with c2:
-        cur = rules.get("schalter_reserve_modus", SCHALTER_RESERVE_MODI[0])
-        modus = st.selectbox("Reserve einsetzen …", SCHALTER_RESERVE_MODI,
-                             index=SCHALTER_RESERVE_MODI.index(cur) if cur in SCHALTER_RESERVE_MODI else 0,
-                             key=f"dec_modus_{ver}",
-                             help="«vor der anderen Gruppe»: Reserve kommt vor der Gruppe dran, die diese Woche nicht aktiv ist. "
-                                  "«nie»: Reserve-Personen machen keinen Schalter.")
-    with c3:
-        cur = rules.get("schalter_code", SCHALTER_CODES[0])
-        code = st.selectbox("Code im Plan", SCHALTER_CODES, index=SCHALTER_CODES.index(cur) if cur in SCHALTER_CODES else 0,
-                            key=f"dec_code_{ver}", help="April-Liste: ERF4/SCH · seit Mai im Plan: ERF7/SCH")
-
-    st.markdown("**2 · TL 1 bis 2× pro Woche am Telefon**")
-    st.caption("Der Generator reserviert für jede TL vorab so viele Telefon-Halbtage wie das Minimum verlangt "
-               "(bevor Schalter, ERF9, RX Abo und ERF8 verteilt werden) und gibt TL danach den Vorzug, bis das "
-               "Maximum erreicht ist. Unter- oder Überschreitungen stehen im Ergebnis als Hinweis. 0 = kein Minimum.")
-    c4, c5, _ = st.columns([1, 1, 3])
-    tl_min = c4.number_input("TL mind. TEL/Woche", 0, 10, int(rules.get("tl_tel_min_pro_woche", 1)), key=f"dec_tlmin_{ver}")
-    tl_max = c5.number_input("TL max. TEL/Woche", 0, 10, int(rules.get("tl_tel_max_pro_woche", 2)), key=f"dec_tlmax_{ver}")
-
-    st.markdown("**3 · TAGES PA am Nachmittag mit Telefon (TAGES PA/TEL)**")
-    st.caption("«bei Bedarf»: nur wenn die TEL-Besetzung am Nachmittag sonst nicht reicht · "
-               "«immer»: jeden Nachmittag · «nie».")
-    cur = rules.get("tpa_tel_nm", TPA_TEL_MODI[0])
-    tpa_mode = st.selectbox("TAGES PA/TEL", TPA_TEL_MODI, index=TPA_TEL_MODI.index(cur) if cur in TPA_TEL_MODI else 0,
-                            key=f"dec_tpa_{ver}", label_visibility="collapsed")
-
-    st.markdown("**4 · Nur manuell**")
-    st.caption("Diese Codes vergibt der Generator nie, sie stehen aber im Plan-Editor (Schritt 2) und bei "
-               "«Custom»-Einträgen zur Auswahl: " + ", ".join(NUR_MANUELL) + ". "
-               "PO/TEL am Nachmittag erzeugt im Ergebnis den Notfall-Hinweis (muss früher vom Telefon weg). "
-               "Vorbezüge (VBZ) sind als Rolle hinterlegt, werden aber nicht geplant.")
-
-    if st.button("✓  Übernehmen", key="decide_apply", type="primary"):
-        new_cfg = copy.deepcopy(cfg)
-        for m in new_cfg["mitarbeiter"]:
-            kann = [r for r in m.get("kann", []) if r != "Schalter-Reserve"]
-            if m["short"] in reserve:
-                kann = [r for r in kann if r != "Schalter"] + ["Schalter-Reserve"]
-            m["kann"] = kann
-        new_cfg["regeln"].update({
-            "schalter_reserve_modus": modus, "schalter_code": code,
-            "tl_tel_min_pro_woche": int(tl_min), "tl_tel_max_pro_woche": int(tl_max),
-            "tpa_tel_nm": tpa_mode,
-        })
-        probs = ak.validate_config(ak.normalize_config(new_cfg))
-        if probs:
-            st.error("; ".join(probs))
-        else:
-            replace_cfg(new_cfg)
-            st.success("Entscheidungen übernommen.")
-            st.rerun()
+    st.caption("Wie viele Personen braucht es wofür? Jede Änderung gilt sofort für den nächsten Plan. "
+               "Wer welche Aufgabe übernehmen darf, steht unter «Wer darf was».")
+    left, right = st.columns(2, gap="large")
+    with left:
+        with st.container(border=True):
+            st.markdown("**📞 Telefon (TEL)**")
+            c1, c2 = st.columns(2)
+            _rule_number(c1, "Montag Vormittag – Personen", "tel_montag_vm", 0, 10, ver)
+            _rule_number(c2, "übrige Halbtage – Personen", "tel_sonst", 0, 10, ver)
+            c3, c4 = st.columns(2)
+            tl_min = _rule_number(c3, "Teamleitung am Telefon – mind. Halbtage/Woche", "tl_tel_min_pro_woche", 0, 10, ver,
+                                  help="Wird für jede TL vorab reserviert. 0 = kein Minimum.")
+            tl_max = _rule_number(c4, "… höchstens Halbtage/Woche", "tl_tel_max_pro_woche", 0, 10, ver,
+                                  help="Bis zu dieser Zahl bekommen TL beim Telefon den Vorzug.")
+            if tl_min > tl_max:
+                st.warning("Minimum ist grösser als Maximum – das Minimum gewinnt.")
+            _rule_select(st, "TAGES PA am Nachmittag zusätzlich am Telefon (TAGES PA/TEL)", "tpa_tel_nm", TPA_TEL_MODI, ver,
+                         help="bei Bedarf: nur wenn die TEL-Besetzung sonst nicht reicht · immer · nie")
+        with st.container(border=True):
+            st.markdown("**🔎 Abklärung (ABKL)**")
+            _rule_number(st, "Personen pro Halbtag", "abkl_pro_halbtag", 0, 10, ver)
+        with st.container(border=True):
+            st.markdown("**📬 Postöffnung (PO)**")
+            _rule_number(st, "Zusätzliche PO-Personen am Vormittag (zur Aushilfe mit PO/SCAN)", "po_zusatz_vm", 0, 5, ver)
+            po_opts = ["–"] + [m["short"] for m in cfg["mitarbeiter"]
+                               if m.get("aktiv", True) and "PO" in m.get("kann", []) and not m.get("tl")]
+            cur = cfg["rotation"].get("po_dienstag_bevorzugt") or "–"
+            if cur not in po_opts:
+                po_opts.append(cur)
+            key = f"rot_popref_{ver}"
+            st.selectbox("Dienstag bevorzugt", po_opts, index=po_opts.index(cur), key=key,
+                         format_func=lambda s: "– niemand –" if s == "–" else disp(s),
+                         on_change=_on_rot_value, args=(key, "po_dienstag_bevorzugt"))
+            key = f"rule_scan_nm_{ver}"
+            st.checkbox("Fehlt die Aushilfe: Nachmittags-Scan durch jemand anderen ersetzen",
+                        bool(rules["scan_nm_ersatz_wenn_aushilfe_fehlt"]), key=key,
+                        on_change=_on_rule, args=(key, "scan_nm_ersatz_wenn_aushilfe_fehlt", bool))
+    with right:
+        with st.container(border=True):
+            st.markdown("**🏬 Schalter**")
+            st.caption("Eine Person pro Tag, ganztags. Wer Schalter oder Reserve macht: «Wer darf was».")
+            c1, c2 = st.columns(2)
+            _rule_select(c1, "Reserve einsetzen …", "schalter_reserve_modus", SCHALTER_RESERVE_MODI, ver,
+                         help="vor / nach der anderen Gruppe, wenn aus der aktiven Gruppe niemand frei ist · nie")
+            _rule_select(c2, "Code im Plan", "schalter_code", SCHALTER_CODES, ver,
+                         help="April-Liste: ERF4/SCH · seit Mai im Plan: ERF7/SCH")
+        with st.container(border=True):
+            st.markdown("**🧾 HUB und RX Abo**")
+            c1, c2 = st.columns(2)
+            _rule_number(c1, "HUB-Halbtage pro Tag", "hub_pro_tag", 0, 2, ver,
+                         help="2 = eine Person am Vormittag + eine andere am Nachmittag · 1 = nur Vormittag · 0 = aus")
+            _rule_number(c2, "RX Abo – Halbtage pro Woche", "rx_abo_pro_woche", 0, 10, ver,
+                         help="höchstens einer pro Tag · 0 = aus")
+        with st.container(border=True):
+            st.markdown("**🗂️ Scanning (Stammteam)**")
+            _rule_number(st, "höchstens Halbtage pro Person und Woche", "scan_max_halbtage_pro_woche", 0, 10, ver)
+            key = f"rule_scan_anteil_{ver}"
+            p = st.slider("Wie oft wird ein freier Halbtag zu «scanning»?", 0.0, 1.0, float(rules["scan_anteil"]), 0.05,
+                          key=key, on_change=_on_rule, args=(key, "scan_anteil", float))
+            st.caption("≈ nie" if p == 0 else f"≈ jeder {max(1, round(1 / p))}. freie Halbtag bei Personen mit Scanning")
+    with st.expander("🔒 Fest im Programm eingebaut (Änderung braucht eine Anpassung im Code)"):
+        st.markdown("\n".join(f"- {r}" for r in FESTE_REGELN))
+        st.markdown("**Nur manuell** (nie automatisch, aber im Plan-Editor wählbar): " + ", ".join(NUR_MANUELL) +
+                    ". Vorbezüge (VBZ) sind als Rolle hinterlegt, werden aber nicht geplant.")
 
 
-def render_team_backup(ver: int) -> None:
+# ── 🗂️ BackUp-Team ────────────────────────────────────────────────────
+
+def _on_backup_edit(key: str, base: list[dict]) -> None:
+    rows = [dict(b) for b in base]
+    removed, errors = set(), []
+    for ridx, changes in st.session_state[key].get("edited_rows", {}).items():
+        i = int(ridx)
+        for col, val in changes.items():
+            if col == "entfernen" and _b(val):
+                removed.add(i)
+            elif col == "Name":
+                if _s(val):
+                    rows[i]["name"] = _s(val)
+                else:
+                    errors.append("Name darf nicht leer sein")
+            elif col == "Standard":
+                rows[i]["standard"] = _s(val)
+    if errors:
+        _fail(errors)
+        return
+    cfg = _cfg_copy()
+    cfg["backup_team"] = [b for i, b in enumerate(rows) if i not in removed]
+    commit_cb(cfg, msg="BackUp-Zeile entfernt" if removed else "", remount=True)
+
+
+def section_backup(ver: int) -> None:
     cfg = st.session_state.cfg
-    st.caption("Diese Zeilen erscheinen unterhalb des Teams und werden nie automatisch geplant. "
-               "«Standard» steht in jeder Zelle (z.B. ERP beim SPP-Team); manuelle Einträge über "
-               "Abwesenheit/Sonderwunsch mit Grund «Custom».")
-    df = pd.DataFrame([{"Kurzname": b["short"], "Name": b.get("name", ""), "Standard": b.get("standard", "")}
-                       for b in cfg["backup_team"]], columns=["Kurzname", "Name", "Standard"])
-    edited = st.data_editor(df, hide_index=True, num_rows="dynamic", width="stretch", key=f"backup_editor_{ver}")
-    if st.button("✓  Übernehmen", key="backup_apply", type="primary"):
-        new_cfg = copy.deepcopy(cfg)
-        new_cfg["backup_team"] = [
-            {"short": _s(r.get("Kurzname")), "name": _s(r.get("Name")) or _s(r.get("Kurzname")), "standard": _s(r.get("Standard"))}
-            for _, r in edited.iterrows() if _s(r.get("Kurzname"))
-        ]
-        probs = ak.validate_config(ak.normalize_config(new_cfg))
-        if probs:
-            st.error("; ".join(probs))
-        else:
-            replace_cfg(new_cfg)
-            st.success("BackUp-Team übernommen.")
-            st.rerun()
+    st.caption("Zeilen unterhalb des Teams im Plan – werden nie automatisch eingeplant. «Standard» steht in jeder "
+               "Zelle (z. B. ERP beim SPP-Team); einzelne Einträge über Schritt 1 mit Grund «Custom».")
+    with st.form(f"add_backup_{ver}", border=True):
+        c = st.columns([3, 2, 1.3], vertical_alignment="bottom")
+        name = c[0].text_input("Name", placeholder="z. B. Petra M.")
+        standard = c[1].text_input("Standard-Eintrag (optional)", placeholder="z. B. ERP")
+        if c[2].form_submit_button("➕  Hinzufügen", type="primary", width="stretch"):
+            if not name.strip():
+                st.error("Bitte einen Namen eingeben.")
+            else:
+                new = _cfg_copy()
+                new["backup_team"].append({"short": ak.new_short(name, new), "name": name.strip(),
+                                           "standard": standard.strip()})
+                errors = try_commit(new, msg=f"{name.strip()} hinzugefügt", remount=True)
+                if errors:
+                    st.error(" · ".join(errors))
+                else:
+                    st.rerun()
+    base = [dict(b) for b in cfg["backup_team"]]
+    df = pd.DataFrame([{"Name": b.get("name") or b["short"], "Standard": b.get("standard", ""), "entfernen": False}
+                       for b in base], columns=["Name", "Standard", "entfernen"])
+    key = f"backup_{ver}"
+    st.data_editor(df, key=key, hide_index=True, num_rows="fixed", width="stretch", height=_editor_height(len(df)),
+                   on_change=_on_backup_edit, args=(key, base),
+                   column_config={"Name": st.column_config.TextColumn("Name", width="medium"),
+                                  "Standard": st.column_config.TextColumn("Standard-Eintrag", width="medium"),
+                                  "entfernen": st.column_config.CheckboxColumn("entfernen", width="small")})
 
 
-def render_team_save(ver: int) -> None:
+# ── 💾 Sichern & Laden ───────────────────────────────────────────────
+
+def section_storage(ver: int) -> None:
     gh = github_conf()
     if gh:
-        st.markdown(f"🔗 GitHub-Speicherung aktiv: `{gh['repo']}` @ `{gh['branch']}` – "
-                    "Speichern schreibt team.json und abwesenheiten.json ins Repo (Streamlit Cloud lädt danach neu).")
+        st.markdown(f"🔗 **GitHub-Speicherung aktiv:** `{gh['repo']}` @ `{gh['branch']}` – «Speichern» schreibt "
+                    "team.json und abwesenheiten.json ins Repo (Streamlit Cloud lädt danach neu).")
     else:
-        st.markdown("ℹ️ Keine GitHub-Speicherung konfiguriert: Änderungen werden lokal gespeichert "
-                    "(auf Streamlit Cloud nur bis zum nächsten Neustart). Für dauerhafte Speicherung "
-                    "`team.json` herunterladen und ins Repo committen – oder in den App-Secrets "
-                    "`[github] token / repo / branch` hinterlegen (siehe README).")
-    c1, c2, c3, c4 = st.columns([1.3, 1.3, 1.3, 1.3])
-    with c1:
-        if st.button("💾  Speichern", key="save_all", type="primary", width="stretch",
-                     disabled=not (cfg_dirty or entries_dirty)):
-            st.session_state.save_msgs = save_everything(push_github=bool(gh))
+        st.markdown("ℹ️ **Keine GitHub-Speicherung eingerichtet:** «Speichern» schreibt nur auf den Server – auf "
+                    "Streamlit Cloud bis zum nächsten Neustart. Für dauerhafte Speicherung `team.json` herunterladen "
+                    "und ins Repo stellen, oder in den App-Secrets `[github] token / repo / branch` eintragen (README).")
+    c1, c2, c3 = st.columns(3)
+    c1.download_button("⬇  team.json", data=ak.config_to_json(st.session_state.cfg), file_name="team.json",
+                       mime="application/json", width="stretch", key=f"dl_cfg_{ver}")
+    c2.download_button("⬇  abwesenheiten.json", data=entries_json(), file_name="abwesenheiten.json",
+                       mime="application/json", width="stretch", key=f"dl_abs_{ver}")
+    if c3.button("↺  Gespeicherte Datei neu laden", key="reload_cfg", width="stretch",
+                 help="Verwirft ungespeicherte Änderungen und lädt team.json und abwesenheiten.json vom Server"):
+        try:
+            replace_cfg(ak.load_config(CONFIG_PATH))
+            st.session_state.cfg_saved_json = ak.config_to_json(st.session_state.cfg)
+            st.session_state.entries = load_entries_from_disk()
+            st.session_state.entries_saved_json = entries_json()
             st.rerun()
-    with c2:
-        st.download_button("⬇  team.json", data=ak.config_to_json(st.session_state.cfg), file_name="team.json",
-                           mime="application/json", width="stretch", key=f"dl_cfg_{ver}")
-    with c3:
-        st.download_button("⬇  abwesenheiten.json", data=entries_json(), file_name="abwesenheiten.json",
-                           mime="application/json", width="stretch", key=f"dl_abs_{ver}")
-    with c4:
-        if st.button("↺  Gespeicherte Version laden", key="reload_cfg", width="stretch"):
-            try:
-                replace_cfg(ak.load_config(CONFIG_PATH))
-                st.session_state.cfg_saved_json = ak.config_to_json(st.session_state.cfg)
-                st.session_state.entries = load_entries_from_disk()
-                st.session_state.entries_saved_json = entries_json()
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
-    for ok, msg in st.session_state.get("save_msgs", []):
-        (st.success if ok else st.warning)(msg)
-    if st.session_state.get("save_msgs"):
-        st.session_state.save_msgs = []
+        except Exception as exc:
+            st.error(str(exc))
 
-    st.markdown('<div class="field-label" style="margin-top:12px;">team.json hochladen (ersetzt die aktuelle Konfiguration)</div>',
+    st.markdown('<div class="field-label" style="margin-top:14px;">team.json hochladen (ersetzt Team & Regeln)</div>',
                 unsafe_allow_html=True)
     up = st.file_uploader("team.json", type=["json"], key=f"upload_cfg_{ver}", label_visibility="collapsed")
     if up is not None:
         try:
-            data = json.loads(up.getvalue().decode("utf-8"))
-            cfg_new = ak.normalize_config(data)
-            probs = ak.validate_config(cfg_new)
-            if probs:
-                st.error("Datei nicht übernommen: " + "; ".join(probs))
+            cfg_new = ak.normalize_config(json.loads(up.getvalue().decode("utf-8")))
+            errors = ak.config_errors(cfg_new)
+            if errors:
+                st.error("Datei nicht übernommen: " + " · ".join(errors))
             else:
                 replace_cfg(cfg_new)
-                st.success("Konfiguration geladen – jetzt «Speichern», damit sie bleibt.")
+                st.toast("Konfiguration geladen – jetzt «Speichern», damit sie bleibt.", icon="✅")
                 st.rerun()
         except Exception as exc:
             st.error(f"Ungültige Datei: {exc}")
-    probs = ak.validate_config(st.session_state.cfg)
-    if probs:
-        st.warning("Konfigurationsprobleme: " + "; ".join(probs))
 
 
-def render_team_management() -> None:
+# ── Seite ─────────────────────────────────────────────────────────────
+
+def _keep_section() -> None:
+    """Segment-Auswahl lässt sich abwählen – dann beim letzten Bereich bleiben."""
+    if not st.session_state.get("team_section"):
+        st.session_state.team_section = st.session_state.get("team_section_last", TEAM_SECTIONS[0])
+    st.session_state.team_section_last = st.session_state.team_section
+
+
+def render_team_page() -> None:
+    ver = st.session_state.cfg_version
     n_total = len(st.session_state.cfg["mitarbeiter"])
-    label = f"👥  Team verwalten · {n_active}/{n_total} aktiv · Personen, Anwesenheit, Rollen, Rotation, Regeln"
-    if cfg_dirty:
-        label += "  ·  ⚠️ ungespeichert"
-    with st.expander(label, expanded=False):
-        ver = st.session_state.cfg_version
-        tabs = st.tabs(["Personen", "Rollen & Fixeinsätze", "Rotation & Regeln", "Entscheidungen",
-                        "BackUp Team", "Speichern / Laden"])
-        with tabs[0]:
-            render_team_people(ver)
-        with tabs[1]:
-            render_team_roles(ver)
-        with tabs[2]:
-            render_team_rotation(ver)
-        with tabs[3]:
-            render_team_decisions(ver)
-        with tabs[4]:
-            render_team_backup(ver)
-        with tabs[5]:
-            render_team_save(ver)
+    st.markdown(f'<div class="page-head"><h2>Team & Regeln</h2><div class="sub">{n_active} von {n_total} Personen aktiv · '
+                'alles, was der Generator über das Team weiss. Änderungen gelten sofort für den nächsten Plan.</div></div>',
+                unsafe_allow_html=True)
+    render_save_bar()
+    errors = st.session_state.pop("team_error", None)
+    if errors:
+        st.error("Nicht übernommen: " + " · ".join(errors))
+    hints = ak.config_hints(st.session_state.cfg)
+    if hints:
+        st.warning("Hinweis: " + " · ".join(hints))
+
+    st.session_state.setdefault("team_section", TEAM_SECTIONS[0])
+    section = st.segmented_control("Bereich", TEAM_SECTIONS, key="team_section", on_change=_keep_section,
+                                   label_visibility="collapsed") or TEAM_SECTIONS[0]
+    with st.expander("❓  Wie ändere ich …?"):
+        st.markdown("| Ich möchte … | So geht's |\n|---|---|\n" +
+                    "\n".join(f"| {was} | {wie} |" for was, wie in HILFE))
+    {
+        "👤 Personen": section_people, "🎯 Wer darf was": section_roles, "📌 Feste Einsätze": section_fixed,
+        "🔄 Rotationen": section_rotation, "⚖️ Regeln": section_rules, "🗂️ BackUp-Team": section_backup,
+        "💾 Sichern & Laden": section_storage,
+    }[section](ver)
 
 
 # ══════════════════════════════════════════════════════════════════════
 #  Schritt 1 – Planung
 # ══════════════════════════════════════════════════════════════════════
 
+def _goto_team() -> None:
+    st.session_state.step = 3
+
+
 def render_planung() -> None:
-    render_team_management()
+    n_total = len(st.session_state.cfg["mitarbeiter"])
+    t1, t2 = st.columns([6, 1.4], vertical_alignment="center")
+    t1.markdown(f'<div class="team-hint">👥 <b>{n_active}</b> von {n_total} Personen aktiv'
+                f'{" · <b>ungespeicherte Team-Änderungen</b>" if cfg_dirty else ""} · '
+                'Personen, Rollen, feste Einsätze, Rotationen und Regeln ändern unter «Team & Regeln».</div>',
+                unsafe_allow_html=True)
+    t2.button("⚙  Team & Regeln", key="goto_team", width="stretch", on_click=_goto_team)
     left, right = st.columns([1.25, 1])
 
     with left:
@@ -1242,7 +1630,7 @@ def render_planung() -> None:
                 with l:
                     st.markdown(
                         f'<div class="entry-row" {opacity}><span class="entry-dot {type_key}"></span>'
-                        f'<span class="entry-name">{html_escape(e["name"])}</span>'
+                        f'<span class="entry-name">{html_escape(disp(e["name"]))}</span>'
                         f'<span class="entry-meta">· {html_escape(e["type"])} · {days_str} ({slot_str}) · {entry_kw_label(e)}</span>'
                         f'{note_html}</div>',
                         unsafe_allow_html=True,
@@ -1348,7 +1736,7 @@ def render_ergebnis() -> None:
     soft = [i for i in res["issues"] if i.startswith("⚠️")]
     infos = [i for i in res["issues"] if not i.startswith("❌") and not i.startswith("⚠️")]
     if res.get("config_problems"):
-        render_banner("warn", "Konfiguration prüfen (Team verwalten)", res["config_problems"])
+        render_banner("warn", "Konfiguration prüfen (Team & Regeln)", res["config_problems"])
     if hard:
         render_banner("error", "Harte Regeln nicht vollständig einhaltbar", hard)
     else:
@@ -1449,7 +1837,9 @@ def render_ergebnis() -> None:
         st.markdown('<div class="legend-wrap">' + "".join(items) + "</div>", unsafe_allow_html=True)
 
 
-if st.session_state.step == 1 or st.session_state.result is None:
+if st.session_state.step == 3:
+    render_team_page()
+elif st.session_state.step == 1 or st.session_state.result is None:
     render_planung()
 else:
     render_ergebnis()

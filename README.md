@@ -71,29 +71,40 @@ python arbeitskalender.py --montag 2026-10-19 --out plan.xlsx   # ohne UI
   Regelprüfung und Excel werden nachgezogen.
 - **⬇ Excel herunterladen** (`Arbeitsplan_KWxx_YYYYMMDD.xlsx`).
 
-### Team verwalten (ohne Code)
+### Team & Regeln (ohne Code)
 
-Im Aufklapper **👥 Team verwalten** (Schritt 1):
+Eigene Seite **⚙ Team & Regeln** (Knopf oben in der Kopfzeile). Jede Änderung gilt
+**sofort** für den nächsten Plan – es gibt kein «Übernehmen» mehr. Die Leiste oben
+zeigt, wie viele Änderungen noch ungespeichert sind («Was wurde geändert?» listet sie
+lesbar auf), **💾 Speichern** macht sie dauerhaft, **↶ Verwerfen** kehrt zum zuletzt
+gespeicherten Stand zurück. «❓ Wie ändere ich …?» erklärt die typischen Fälle in der App.
 
-| Tab | Was |
+| Bereich | Was |
 |---|---|
-| **Personen** | Tabelle: Kurzname, Anzeigename («Vorname N.»), Pensum, Aktiv, TL, nur TEL, Aushilfe, Anwesenheit Mo–Fr (ganz / VM / NM / frei), Bemerkung. Zeile hinzufügen = neue Person, Zeile löschen = Person entfernen. **Deaktivieren** statt löschen, wenn jemand vorübergehend fehlt (z. B. Martina). |
-| **Rollen & Fixeinsätze** | Pro Person: was sie darf (HUB, RX Abo, Schalter, Scanning, PO, TPA, PHC, ERF8, ERF9-Rotation, ONB, Direkt, BTM, VBZ), «alle 2 Wochen frei» (gerade/ungerade KW), fixe Einsätze (z. B. Mo ganz ERF9, Di VM KGS, Di ganz HO/Q nur in ungeraden KW). |
-| **Rotation & Regeln** | Reihenfolge der TL für die Tagesverantwortung, PHC Montag/Freitag-Wechsel, PHC fix pro Tag, PHC-Ausschlüsse pro Tag, Labor-Wechsel, PO-Dienstag-Präferenz, Schalter-Gruppe und Wochenaufgaben **«diese Woche»** (damit stellst du die Rotation auf die Realität ein), sowie die Besetzungszahlen (TEL, ABKL, Zusatz-PO, HUB, RX Abo, Scanning). |
-| **Entscheidungen** | Punkte, die das Team nicht eindeutig geregelt hat – hier entscheidet die Planerin: **Schalter-Reserve** (Brigitte, Saskia, Dragi «nicht alle 2 Wochen»: kommen nur dran, wenn aus der Gruppe niemand frei ist; Einsatzregel vor/nach der anderen Gruppe/nie), **Schalter-Code** im Plan (ERF7/SCH oder ERF4/SCH), **TL am Telefon** (Minimum und Maximum pro Woche; Abweichungen erscheinen als Hinweis), **TAGES PA/TEL** am Nachmittag (bei Bedarf / immer / nie), und die Liste der Codes, die nur manuell vergeben werden. |
-| **BackUp Team** | Zeilen unterhalb des Teams mit Standard-Eintrag (SPP-Team: `ERP`). |
-| **Speichern / Laden** | Speichern, `team.json` herunter-/hochladen, gespeicherte Version neu laden. |
+| **👤 Personen** | Tabelle: Name («Vorname N.»), Nr. (Reihenfolge im Plan – Zahl ändern verschiebt), Pensum, Aktiv, Funktion (Team / Teamleitung / nur Telefon / Aushilfe), Anwesenheit Mo–Fr (ganz / VM / NM / frei), Bemerkung. **➕ Neue Person** (Dialog, Rollen von einer ähnlichen Person übernehmbar, Position im Plan wählbar) und **🗑️ Person entfernen …** (mit Hinweis, aus welchen Rotationen sie herausfällt, und Angebot «Deaktivieren»). **Deaktivieren** statt löschen, wenn jemand vorübergehend fehlt (z. B. Martina). |
+| **🎯 Wer darf was** | Matrix Person × Aufgabe mit Häkchen (HUB, ERF8, ERF9 Mi–Fr, TAGES PA, 18-Uhr-Liste, Postöffnung, Scanning, RX Abo, Direkt, ONB, BTM, VBZ); Schalter als Auswahl «ja / Reserve / –». Darunter: wie viele aktive Personen pro Aufgabe infrage kommen. |
+| **📌 Feste Einsätze** | Eine Tabelle für alle fixen Einsätze **und** «alle 2 Wochen frei» (Einsatz «frei» mit «gerade KW» / «ungerade KW»). Oben hinzufügen, in der Tabelle ändern, «entfernen» anhaken zum Löschen. |
+| **🔄 Rotationen** | Tagesverantwortung, 18-Uhr-Liste (Montag- und Freitag-Wechsel, fix pro Tag, «nie an diesem Tag»), Labor, Schalter-Gruppe, Wochenaufgaben – jeweils mit **«diese Woche»** (damit stellst du die Rotation auf die Realität ein) und einer **Vorschau der nächsten 6 Wochen**. |
+| **⚖️ Regeln** | Besetzungszahlen und Entscheidungen nach Thema: Telefon (Mo VM, sonst, TL mind./max., TAGES PA/TEL), Abklärung, Postöffnung (Zusatz-PO, Dienstag bevorzugt, NM-Scan-Ersatz), Schalter (Reserve-Modus, Code), HUB, RX Abo, Scanning. Aufklapper «Fest im Programm eingebaut» listet, was nur per Code änderbar ist. |
+| **🗂️ BackUp-Team** | Zeilen unterhalb des Teams mit Standard-Eintrag (SPP-Team: `ERP`). |
+| **💾 Sichern & Laden** | `team.json` / `abwesenheiten.json` herunterladen, `team.json` hochladen, gespeicherte Datei neu laden. |
+
+Kurznamen sind nur noch ein interner Schlüssel in `team.json` (Rotationen, Abwesenheiten):
+Die App zeigt überall den Namen und vergibt den Kurznamen für neue Personen automatisch
+(Vorname, bei Kollision der ganze Name). Ein umbenannter Name ändert den Kurznamen nicht.
 
 Typische Fälle:
 
-- **Neue Person**: Tab Personen → «+» → Kurzname, Name, %, Anwesenheit → Übernehmen →
-  Tab Rollen → Rollen setzen → Übernehmen → Speichern.
-- **Person verlässt das Team**: Aktiv-Häkchen entfernen (oder Zeile löschen) → Speichern.
-  Fixeinsätze und Rotationen dieser Person entfallen automatisch; steht sie in einer
-  Rotation (TV, PHC, Labor), zeigt die App einen Hinweis.
-- **Pensum / Arbeitstage ändern**: Tab Personen → % und Anwesenheit → Übernehmen → Speichern.
-- **Fixe Aufgabe wechselt** (z. B. Mo-ERF9 an eine andere Person): Tab Rollen,
-  Fixeinsatz bei der einen Person löschen, bei der anderen hinzufügen.
+- **Neue Person**: Personen → «➕ Neue Person» → Name, Pensum, Funktion, Anwesenheit,
+  ggf. «Rollen übernehmen von» → Wer darf was prüfen → 💾 Speichern.
+- **Person fehlt länger / verlässt das Team**: Aktiv-Häkchen entfernen bzw. «Person entfernen …»
+  → Speichern. Beim Entfernen werden Fixeinsätze und alle Rotations-Verweise mitgelöscht;
+  inaktive Personen bleiben in Rotationen stehen und werden übersprungen (Hinweis oben).
+- **Neue Teamleitung**: Funktion «Teamleitung» – sie kommt automatisch ans Ende der
+  TV- und der PHC-Montag-Rotation (umgekehrt fällt eine ehemalige TL dort heraus).
+- **Pensum / Arbeitstage ändern**: Personen → % bzw. Mo–Fr → Speichern.
+- **Fixe Aufgabe wechselt** (z. B. Mo-ERF9 an eine andere Person): Feste Einsätze →
+  alte Zeile «entfernen», oben die neue hinzufügen.
 
 ### Speichern – wichtig für Streamlit Cloud
 
@@ -179,7 +190,7 @@ weil man früher vom Telefon weg muss); manuell gesetzt erscheint ein Hinweis.
 
 | # | Thema | Annahme in Version 7.0 | Wo anpassen |
 |---|---|---|---|
-| 1 | Pensen Florence (neu Fr anwesend), Manuela, Maria F. | 90 / 80 / 80 % (aus den Halbtagen abgeleitet) | Team verwalten → Personen |
+| 1 | Pensen Florence (neu Fr anwesend), Manuela, Maria F. | 90 / 80 / 80 % (aus den Halbtagen abgeleitet) | Team & Regeln → Personen |
 | 2 | Postöffnung am Vormittag | Aushilfe PO/SCAN **plus 2** rotierende PO-Personen (wie seit Mai) | Rotation & Regeln → «Zusatz-PO am VM» |
 | 3 | «PÖ und TEL am Nachmittag nur Notfall» | gelesen als: die Kombination **PO/TEL** am Nachmittag wird nie automatisch geplant | – |
 | 4 | RX Abo | 2 Halbtage pro Woche, max. 1 pro Tag, Pool Lara / Linda / Isaura | Rotation & Regeln → «RX Abo / Woche» (0 = aus) |
