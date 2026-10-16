@@ -665,7 +665,7 @@ st.markdown(
 #  Person – angezeigt wird überall nur der Name.
 
 TEAM_SECTIONS = ["👤 Personen", "🎯 Wer darf was", "📌 Feste Einsätze", "🔄 Rotationen",
-                 "⚖️ Regeln", "🗂️ BackUp-Team", "💾 Sichern & Laden"]
+                 "⚖️ Regeln", "🗂️ BackUp-Team"]
 WOCHEN = {"jede Woche": None, "gerade KW": "gerade", "ungerade KW": "ungerade"}
 WOCHEN_LABEL = {v: k for k, v in WOCHEN.items()}
 FREI = "frei (nicht da)"
@@ -1429,50 +1429,6 @@ def section_backup(ver: int) -> None:
                                   "entfernen": st.column_config.CheckboxColumn("entfernen", width="small")})
 
 
-# ── 💾 Sichern & Laden ───────────────────────────────────────────────
-
-def section_storage(ver: int) -> None:
-    gh = github_conf()
-    if gh:
-        st.markdown(f"🔗 **GitHub-Speicherung aktiv:** `{gh['repo']}` @ `{gh['branch']}` – «Speichern» schreibt "
-                    "team.json und abwesenheiten.json ins Repo (Streamlit Cloud lädt danach neu).")
-    else:
-        st.markdown("ℹ️ **Keine GitHub-Speicherung eingerichtet:** «Speichern» schreibt nur auf den Server – auf "
-                    "Streamlit Cloud bis zum nächsten Neustart. Für dauerhafte Speicherung `team.json` herunterladen "
-                    "und ins Repo stellen, oder in den App-Secrets `[github] token / repo / branch` eintragen (README).")
-    c1, c2, c3 = st.columns(3)
-    c1.download_button("⬇  team.json", data=ak.config_to_json(st.session_state.cfg), file_name="team.json",
-                       mime="application/json", width="stretch", key=f"dl_cfg_{ver}")
-    c2.download_button("⬇  abwesenheiten.json", data=entries_json(), file_name="abwesenheiten.json",
-                       mime="application/json", width="stretch", key=f"dl_abs_{ver}")
-    if c3.button("↺  Gespeicherte Datei neu laden", key="reload_cfg", width="stretch",
-                 help="Verwirft ungespeicherte Änderungen und lädt team.json und abwesenheiten.json vom Server"):
-        try:
-            replace_cfg(ak.load_config(CONFIG_PATH))
-            st.session_state.cfg_saved_json = ak.config_to_json(st.session_state.cfg)
-            st.session_state.entries = load_entries_from_disk()
-            st.session_state.entries_saved_json = entries_json()
-            st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
-
-    st.markdown('<div class="field-label" style="margin-top:14px;">team.json hochladen (ersetzt Team & Regeln)</div>',
-                unsafe_allow_html=True)
-    up = st.file_uploader("team.json", type=["json"], key=f"upload_cfg_{ver}", label_visibility="collapsed")
-    if up is not None:
-        try:
-            cfg_new = ak.normalize_config(json.loads(up.getvalue().decode("utf-8")))
-            errors = ak.config_errors(cfg_new)
-            if errors:
-                st.error("Datei nicht übernommen: " + " · ".join(errors))
-            else:
-                replace_cfg(cfg_new)
-                st.toast("Konfiguration geladen – jetzt «Speichern», damit sie bleibt.", icon="✅")
-                st.rerun()
-        except Exception as exc:
-            st.error(f"Ungültige Datei: {exc}")
-
-
 # ── Seite ─────────────────────────────────────────────────────────────
 
 def _keep_section() -> None:
@@ -1496,7 +1452,8 @@ def render_team_page() -> None:
     if hints:
         st.warning("Hinweis: " + " · ".join(hints))
 
-    st.session_state.setdefault("team_section", TEAM_SECTIONS[0])
+    if st.session_state.get("team_section") not in TEAM_SECTIONS:
+        st.session_state.team_section = TEAM_SECTIONS[0]
     section = st.segmented_control("Bereich", TEAM_SECTIONS, key="team_section", on_change=_keep_section,
                                    label_visibility="collapsed") or TEAM_SECTIONS[0]
     with st.expander("❓  Wie ändere ich …?"):
@@ -1505,7 +1462,6 @@ def render_team_page() -> None:
     {
         "👤 Personen": section_people, "🎯 Wer darf was": section_roles, "📌 Feste Einsätze": section_fixed,
         "🔄 Rotationen": section_rotation, "⚖️ Regeln": section_rules, "🗂️ BackUp-Team": section_backup,
-        "💾 Sichern & Laden": section_storage,
     }[section](ver)
 
 

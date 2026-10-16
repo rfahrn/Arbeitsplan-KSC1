@@ -87,7 +87,6 @@ gespeicherten Stand zurück. «❓ Wie ändere ich …?» erklärt die typischen
 | **🔄 Rotationen** | Tagesverantwortung, 18-Uhr-Liste (Montag- und Freitag-Wechsel, fix pro Tag, «nie an diesem Tag»), Labor, Schalter-Gruppe, Wochenaufgaben – jeweils mit **«diese Woche»** (damit stellst du die Rotation auf die Realität ein) und einer **Vorschau der nächsten 6 Wochen**. |
 | **⚖️ Regeln** | Besetzungszahlen und Entscheidungen nach Thema: Telefon (Mo VM, sonst, TL mind./max., TAGES PA/TEL), Abklärung, Postöffnung (Zusatz-PO, Dienstag bevorzugt, NM-Scan-Ersatz), Schalter (Reserve-Modus, Code), HUB, RX Abo, Scanning. Aufklapper «Fest im Programm eingebaut» listet, was nur per Code änderbar ist. |
 | **🗂️ BackUp-Team** | Zeilen unterhalb des Teams mit Standard-Eintrag (SPP-Team: `ERP`). |
-| **💾 Sichern & Laden** | `team.json` / `abwesenheiten.json` herunterladen, `team.json` hochladen, gespeicherte Datei neu laden. |
 
 Kurznamen sind nur noch ein interner Schlüssel in `team.json` (Rotationen, Abwesenheiten):
 Die App zeigt überall den Namen und vergibt den Kurznamen für neue Personen automatisch
@@ -124,8 +123,9 @@ Streamlit Cloud hat **kein dauerhaftes Dateisystem**: lokal gespeicherte
    «💾 Speichern» schreibt dann `team.json` und `abwesenheiten.json` ins Repo
    (ein Commit pro Datei); Streamlit Cloud lädt die App danach automatisch neu.
    So funktioniert die Pflege auch, wenn niemand mit Git-Zugang da ist.
-2. **Ohne Token**: «⬇ team.json» herunterladen und die Datei im Repo ersetzen
-   (GitHub-Weboberfläche: Datei öffnen → Stift → Inhalt einfügen → Commit).
+2. **Ohne Token**: «💾 Speichern» schreibt nur auf den Server – Änderungen bleiben
+   bis zum nächsten Neustart der App. Dauerhaft nur, indem `team.json` im Repo
+   angepasst wird (GitHub-Weboberfläche: Datei öffnen → Stift → Commit).
 
 Lokal (eigener Rechner / Docker) wird immer in die Dateien neben der App geschrieben.
 Pfade lassen sich mit `KSC_TEAM_CONFIG` und `KSC_ABSENCES` übersteuern.
